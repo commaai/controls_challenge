@@ -2,8 +2,13 @@ import argparse
 import numpy as np
 import onnxruntime as ort
 import pandas as pd
-from typing import List, Union, Tuple
 import matplotlib.pyplot as plt
+
+from collections import namedtuple
+from hashlib import md5
+from typing import List, Union, Tuple
+
+from controllers import BaseController, SimpleController
 
 ACC_G = 9.81
 SIM_START_IDX = 100
@@ -11,6 +16,8 @@ CONTEXT_LENGTH = 20
 VOCAB_SIZE = 1024
 LATACCEL_RANGE = [-4, 4]
 MAX_ACC_DELTA = 0.5
+
+State = namedtuple('State', ['roll_lataccel', 'vEgo', 'aEgo'])
 
 
 class LataccelTokenizer:
@@ -35,6 +42,7 @@ class TinyPhysicsModel:
     options = ort.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1
+    options.log_severity_level = 3
     if 'CUDAExecutionProvider' in ort.get_available_providers():
       print("ONNX Runtime is using GPU")
       provider = ('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT'})
@@ -54,13 +62,14 @@ class TinyPhysicsModel:
     probs = self.softmax(res / temperature, axis=-1)
     # we only care about the last timestep (batch size is just 1)
     assert probs.shape[0] == 1
-    assert probs.shape[2] == 1024
+    assert probs.shape[2] == VOCAB_SIZE
     sample = np.random.choice(probs.shape[2], p=probs[0, -1])
     return sample
 
-  def get_current_lataccel(self, states: np.ndarray, actions: np.ndarray, past_preds: np.ndarray) -> float:
+  def get_current_lataccel(self, sim_states: List[State], actions: List[float], past_preds: List[float]) -> float:
     tokenized_actions = self.tokenizer.encode(past_preds)
-    states = np.column_stack([actions, states])
+    raw_states = [list(x) for x in sim_states]
+    states = np.column_stack([actions, raw_states])
     input_data = {
       'states': np.expand_dims(states, axis=0).astype(np.float32),
       'tokens': np.expand_dims(tokenized_actions, axis=0).astype(np.int64)
@@ -68,30 +77,30 @@ class TinyPhysicsModel:
     return self.tokenizer.decode(self.predict(input_data, temperature=1.))
 
 
-class Controller:
-  def update(self, target_lataccel, current_lataccel, state):
-    raise NotImplementedError
-
-
 class TinyPhysicsSimulator:
-  def __init__(self, model_path: str, data_path: str, do_sim_step: bool, do_control_step: bool, controller: Controller) -> None:
+  def __init__(self, model_path: str, data_path: str, do_sim_step: bool, do_control_step: bool, controller: BaseController) -> None:
+    self.data_path = data_path
     self.sim_model = TinyPhysicsModel(model_path)
     self.data = self.get_data(data_path)
     self.do_sim_step = do_sim_step
     self.do_control_step = do_control_step
+    self.controller = controller
+    self.reset()
+
+  def reset(self) -> None:
     self.step_idx = 0
     self.state_history = []
     self.action_history = []
     self.current_lataccel_history = []
     self.target_lataccel_history = []
     self.current_lataccel = 0.
-
-    self.controller = controller
+    seed = int(md5(self.data_path.encode()).hexdigest(), 16) % 10**4
+    np.random.seed(seed)
 
   def get_data(self, data_path: str) -> pd.DataFrame:
     df = pd.read_csv(data_path)
     processed_df = pd.DataFrame({
-      'roll_compensation': np.sin(df['roll'].values) * ACC_G,
+      'roll_lataccel': np.sin(df['roll'].values) * ACC_G,
       'vEgo': df['vEgo'].values,
       'aEgo': df['aEgo'].values,
       'target_lataccel': df['latAccelSteeringAngle'].values,
@@ -101,9 +110,9 @@ class TinyPhysicsSimulator:
   def sim_step(self, step_idx: int) -> None:
     if self.do_sim_step and step_idx >= SIM_START_IDX:
       pred = self.sim_model.get_current_lataccel(
-        states=np.array(self.state_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]),
-        actions=np.array(self.action_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]),
-        past_preds=np.array(self.current_lataccel_history[max(0, step_idx - CONTEXT_LENGTH):step_idx])
+        sim_states=self.state_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
+        actions=self.action_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
+        past_preds=self.current_lataccel_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]
       )
       self.current_lataccel = np.clip(pred, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
     else:
@@ -119,7 +128,7 @@ class TinyPhysicsSimulator:
 
   def get_state_target(self, step_idx: int) -> Tuple[List, float]:
     state = self.data.iloc[step_idx]
-    return [state['roll_compensation'], state['vEgo'], state['aEgo']], state['target_lataccel']
+    return State(roll_lataccel=state['roll_lataccel'], vEgo=state['vEgo'], aEgo=state['aEgo']), state['target_lataccel']
 
   def step(self) -> None:
     state, target = self.get_state_target(self.step_idx)
@@ -138,6 +147,11 @@ class TinyPhysicsSimulator:
     ax.set_xlabel(axis_labels[0])
     ax.set_ylabel(axis_labels[1])
 
+  def compute_score(self) -> float:
+    target = np.array(self.target_lataccel_history)[SIM_START_IDX:]
+    pred = np.array(self.current_lataccel_history)[SIM_START_IDX:]
+    return -np.mean((target - pred)**2)
+
   def rollout(self, debug=True) -> None:
     if debug:
       plt.ion()
@@ -145,16 +159,19 @@ class TinyPhysicsSimulator:
 
     for _ in range(len(self.data)):
       self.step()
-      if debug:
+      if debug and self.step_idx % 10 == 0:
         print(f"Step {self.step_idx:<5}: Current lataccel: {self.current_lataccel:>6.2f}, Target lataccel: {self.target_lataccel_history[-1]:>6.2f}")
         self.plot_data(ax[0], [(self.target_lataccel_history, 'Target lataccel'), (self.current_lataccel_history, 'Current lataccel')], ['Step', 'Lateral Acceleration'], 'Lateral Acceleration')
         self.plot_data(ax[1], [(self.action_history, 'Action')], ['Step', 'Action'], 'Action')
-        self.plot_data(ax[2], [(np.array(self.state_history)[:, 0], 'Roll Compensation')], ['Step', 'Lateral Accel | gravity'], 'Lateral Accel | gravity')
+        self.plot_data(ax[2], [(np.array(self.state_history)[:, 0], 'Roll Lateral Acceleration')], ['Step', 'Lateral Accel due to Road Roll'], 'Lateral Accel due to Road Roll')
         self.plot_data(ax[3], [(np.array(self.state_history)[:, 1], 'vEgo')], ['Step', 'vEgo'], 'vEgo')
         plt.pause(0.01)
 
-    plt.ioff()
-    plt.show()
+    if debug:
+      plt.ioff()
+      plt.show()
+
+    return self.compute_score()
 
 
 if __name__ == "__main__":
@@ -163,7 +180,9 @@ if __name__ == "__main__":
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--do_sim_step", action='store_true')
   parser.add_argument("--do_control_step", action='store_true')
+  parser.add_argument("--vis", action='store_true')
   args = parser.parse_args()
 
-  sim = TinyPhysicsSimulator(args.model_path, args.data_path, args.do_sim_step, args.do_control_step, controller=None)
-  sim.rollout(debug=True)
+  sim = TinyPhysicsSimulator(args.model_path, args.data_path, args.do_sim_step, args.do_control_step, controller=SimpleController())
+  score = sim.rollout(args.vis)
+  print(f"Final score: {score:>6.4}")
