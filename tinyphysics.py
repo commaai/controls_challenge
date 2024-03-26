@@ -3,6 +3,7 @@ import numpy as np
 import onnxruntime as ort
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from collections import namedtuple
 from hashlib import md5
@@ -12,6 +13,7 @@ from tqdm import tqdm
 
 from controllers import BaseController, SimpleController
 
+sns.set_theme()
 
 ACC_G = 9.81
 SIM_START_IDX = 100
@@ -161,14 +163,14 @@ class TinyPhysicsSimulator:
     target = np.array(self.target_lataccel_history)[SIM_START_IDX:]
     pred = np.array(self.current_lataccel_history)[SIM_START_IDX:]
 
-    lat_accel_cost = np.mean(((target - pred) / DEL_T)**2)
-    jerk_cost = np.mean(np.diff(pred)**2)
+    lat_accel_cost = np.mean((target - pred)**2)
+    jerk_cost = np.mean((np.diff(pred) / DEL_T)**2)
     return lat_accel_cost, jerk_cost
 
   def rollout(self) -> None:
     if self.debug:
       plt.ion()
-      fig, ax = plt.subplots(4, figsize=(12, 14))
+      fig, ax = plt.subplots(4, figsize=(12, 14), constrained_layout=True)
 
     for _ in range(len(self.data)):
       self.step()

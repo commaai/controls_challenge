@@ -1,0 +1,6 @@
+numpy==1.25.2
+onnxruntime-gpu==1.16.3
+pandas==2.1.2
+matplotlib==3.8.1
+seaborn==0.13.2
+tqdm
