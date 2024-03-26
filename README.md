@@ -12,10 +12,11 @@ We'll be using driving segments from the [comma-steering-control](https://github
 bash ./download_dataset.sh
 
 # Test this works
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --do_sim_step --do_control_step --vis
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --do_sim_step --do_control_step --debug
 
 
 # Batch Metrics on lots of routes
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 1000 --do_sim_step --do_control_step
 
 ```
 
@@ -27,3 +28,14 @@ This is a "simulated car" that has been trained to mimic a very simple physics m
 ## Controllers
 Your controller should implement an [update function](https://github.com/commaai/controls_challenge/blob/1a25ee200f5466cb7dc1ab0bf6b7d0c67a2481db/controllers.py#L2) that returns the `steer_action [-1, 1]`. This controller is then run in-loop, in the simulator to autoregressively predict the car's response.
 
+*Note: The `steerFiltered` column in the dataset is not relevant here. That was the steer command for a particular platform. We're using the dataset here only to get realistic driving scenarios wrt road roll, desired acceleration and car states (velocity, forward acceleration).*
+
+
+## Evaluation
+Each rollout will result in 2 costs:
+- `lat_accel_cost`: $\dfrac{\Sigma(actual\_lat\_accel - target\_lat\_accel)^2}{steps}$
+
+- `jerk_cost`: $\dfrac{\Sigma((actual\_lat\_accel_{t} - actual\_lat\_accel_{t-1}) / \Delta t)^2}{steps - 1}$
+
+
+Minimizing both costs are very important.
