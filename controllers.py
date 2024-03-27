@@ -11,3 +11,9 @@ class ZeroController(BaseController):
 class SimpleController(BaseController):
   def update(self, target_lataccel, current_lataccel, state):
     return (target_lataccel - current_lataccel) * 0.3
+
+
+CONTROLLERS = {
+  'zero': ZeroController,
+  'simple': SimpleController,
+}

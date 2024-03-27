@@ -12,11 +12,11 @@ We'll be using driving segments from the [comma-steering-control](https://github
 bash ./download_dataset.sh
 
 # Test this works
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --do_sim_step --do_control_step --debug
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --do_sim_step --do_control_step --debug --controller simple
 
 
 # Batch Metrics on lots of routes
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 1000 --do_sim_step --do_control_step
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 1000 --do_sim_step --do_control_step --controller simple
 
 ```
 

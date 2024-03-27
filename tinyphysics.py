@@ -4,6 +4,7 @@ import onnxruntime as ort
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import signal
 
 from collections import namedtuple
 from hashlib import md5
@@ -11,9 +12,10 @@ from pathlib import Path
 from typing import List, Union, Tuple
 from tqdm import tqdm
 
-from controllers import BaseController, SimpleController
+from controllers import BaseController, CONTROLLERS
 
 sns.set_theme()
+signal.signal(signal.SIGINT, signal.SIG_DFL)  # Enable Ctrl-C on plot windows
 
 ACC_G = 9.81
 SIM_START_IDX = 100
@@ -196,20 +198,22 @@ if __name__ == "__main__":
   parser.add_argument("--do_sim_step", action='store_true')
   parser.add_argument("--do_control_step", action='store_true')
   parser.add_argument("--debug", action='store_true')
+  parser.add_argument("--controller", default='simple', choices=CONTROLLERS.keys())
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=args.debug)
+  controller = CONTROLLERS[args.controller]()
 
   data_path = Path(args.data_path)
   if data_path.is_file():
-    sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, args.do_sim_step, args.do_control_step, controller=SimpleController(), debug=args.debug)
+    sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, args.do_sim_step, args.do_control_step, controller=controller, debug=args.debug)
     lat_accel_cost, jerk_cost = sim.rollout()
     print(f"\nAverage lat_accel_cost: {lat_accel_cost:>6.4}, average jerk_cost: {jerk_cost:>6.4}")
   elif data_path.is_dir():
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
-      sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), args.do_sim_step, args.do_control_step, controller=SimpleController(), debug=args.debug)
+      sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), args.do_sim_step, args.do_control_step, controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)
     costs = np.array(costs)
