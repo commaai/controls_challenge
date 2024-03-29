@@ -16,7 +16,10 @@ python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/
 
 
 # Batch Metrics on lots of routes
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 1000 --do_sim_step --do_control_step --controller simple
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --do_sim_step --do_control_step --controller simple
+
+# Generate a report comparing two controllers
+python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller zero
 
 ```
 
