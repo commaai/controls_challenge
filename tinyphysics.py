@@ -194,7 +194,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
-  parser.add_argument("--num_segs", type=int, default=1000)
+  parser.add_argument("--num_segs", type=int, default=100)
   parser.add_argument("--do_sim_step", action='store_true')
   parser.add_argument("--do_control_step", action='store_true')
   parser.add_argument("--debug", action='store_true')
