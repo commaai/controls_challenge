@@ -6,7 +6,7 @@ fi
 
 cd data
 
-URL="https://huggingface.co/datasets/commaai/commaSteeringControl/resolve/main/data/TOYOTA_COROLLA_TSS2_2019.zip"
+URL="https://huggingface.co/datasets/commaai/commaSteeringControl/resolve/main/data/SYNTHETIC_V0.zip"
 
 echo "Downloading dataset from $URL"
 wget "$URL"

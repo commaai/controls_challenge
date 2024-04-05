@@ -26,7 +26,7 @@ STEER_RANGE = [-1, 1]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
 
-State = namedtuple('State', ['roll_lataccel', 'vEgo', 'aEgo'])
+State = namedtuple('State', ['roll_lataccel', 'v_ego', 'a_ego'])
 
 
 class LataccelTokenizer:
@@ -114,9 +114,10 @@ class TinyPhysicsSimulator:
     df = pd.read_csv(data_path)
     processed_df = pd.DataFrame({
       'roll_lataccel': np.sin(df['roll'].values) * ACC_G,
-      'vEgo': df['vEgo'].values,
-      'aEgo': df['aEgo'].values,
-      'target_lataccel': df['latAccelSteeringAngle'].values,
+      'v_ego': df['vEgo'].values,
+      'a_ego': df['aEgo'].values,
+      'target_lataccel': df['targetLateralAcceleration'].values,
+      'steer_command': df['steerCommand'].values
     })
     return processed_df
 
@@ -142,7 +143,7 @@ class TinyPhysicsSimulator:
 
   def get_state_target(self, step_idx: int) -> Tuple[List, float]:
     state = self.data.iloc[step_idx]
-    return State(roll_lataccel=state['roll_lataccel'], vEgo=state['vEgo'], aEgo=state['aEgo']), state['target_lataccel']
+    return State(roll_lataccel=state['roll_lataccel'], v_ego=state['v_ego'], a_ego=state['a_ego']), state['target_lataccel']
 
   def step(self) -> None:
     state, target = self.get_state_target(self.step_idx)
@@ -181,7 +182,7 @@ class TinyPhysicsSimulator:
         self.plot_data(ax[0], [(self.target_lataccel_history, 'Target lataccel'), (self.current_lataccel_history, 'Current lataccel')], ['Step', 'Lateral Acceleration'], 'Lateral Acceleration')
         self.plot_data(ax[1], [(self.action_history, 'Action')], ['Step', 'Action'], 'Action')
         self.plot_data(ax[2], [(np.array(self.state_history)[:, 0], 'Roll Lateral Acceleration')], ['Step', 'Lateral Accel due to Road Roll'], 'Lateral Accel due to Road Roll')
-        self.plot_data(ax[3], [(np.array(self.state_history)[:, 1], 'vEgo')], ['Step', 'vEgo'], 'vEgo')
+        self.plot_data(ax[3], [(np.array(self.state_history)[:, 1], 'v_ego')], ['Step', 'v_ego'], 'v_ego')
         plt.pause(0.01)
 
     if self.debug:
