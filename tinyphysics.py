@@ -18,7 +18,7 @@ sns.set_theme()
 signal.signal(signal.SIGINT, signal.SIG_DFL)  # Enable Ctrl-C on plot windows
 
 ACC_G = 9.81
-SIM_START_IDX = 100
+CONTROL_START_IDX = 100
 CONTEXT_LENGTH = 20
 VOCAB_SIZE = 1024
 LATACCEL_RANGE = [-5, 5]
@@ -89,24 +89,22 @@ class TinyPhysicsModel:
 
 
 class TinyPhysicsSimulator:
-  def __init__(self, model: TinyPhysicsModel, data_path: str, do_sim_step: bool, do_control_step: bool, controller: BaseController, debug: bool = False) -> None:
+  def __init__(self, model: TinyPhysicsModel, data_path: str, controller: BaseController, debug: bool = False) -> None:
     self.data_path = data_path
     self.sim_model = model
     self.data = self.get_data(data_path)
-    self.do_sim_step = do_sim_step
-    self.do_control_step = do_control_step
     self.controller = controller
     self.debug = debug
     self.times = []
     self.reset()
 
   def reset(self) -> None:
-    self.step_idx = 0
-    self.state_history = []
-    self.action_history = []
-    self.current_lataccel_history = []
-    self.target_lataccel_history = []
-    self.current_lataccel = 0.
+    self.step_idx = CONTEXT_LENGTH
+    self.state_history = [self.get_state_target(i)[0] for i in range(self.step_idx)]
+    self.action_history = self.data['steer_command'].values[:self.step_idx].tolist()
+    self.current_lataccel_history = [self.get_state_target(i)[1] for i in range(self.step_idx)]
+    self.target_lataccel_history = [self.get_state_target(i)[1] for i in range(self.step_idx)]
+    self.current_lataccel = self.current_lataccel_history[-1]
     seed = int(md5(self.data_path.encode()).hexdigest(), 16) % 10**4
     np.random.seed(seed)
 
@@ -122,22 +120,24 @@ class TinyPhysicsSimulator:
     return processed_df
 
   def sim_step(self, step_idx: int) -> None:
-    if self.do_sim_step and step_idx >= SIM_START_IDX:
-      pred = self.sim_model.get_current_lataccel(
-        sim_states=self.state_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
-        actions=self.action_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
-        past_preds=self.current_lataccel_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]
-      )
-      self.current_lataccel = np.clip(pred, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
+    pred = self.sim_model.get_current_lataccel(
+      sim_states=self.state_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
+      actions=self.action_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
+      past_preds=self.current_lataccel_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]
+    )
+    pred = np.clip(pred, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
+    if step_idx >= CONTROL_START_IDX:
+      self.current_lataccel = pred
     else:
-      self.current_lataccel = self.data.iloc[step_idx]['target_lataccel']
+      self.current_lataccel = self.get_state_target(step_idx)[1]
+   
     self.current_lataccel_history.append(self.current_lataccel)
 
   def control_step(self, step_idx: int) -> None:
-    if self.do_control_step and step_idx >= SIM_START_IDX:
+    if step_idx >= CONTROL_START_IDX:
       action = self.controller.update(self.target_lataccel_history[step_idx], self.current_lataccel, self.state_history[step_idx])
     else:
-      action = 0.
+      action = self.data['steer_command'].values[step_idx]
     action = np.clip(action, STEER_RANGE[0], STEER_RANGE[1])
     self.action_history.append(action)
 
@@ -157,14 +157,15 @@ class TinyPhysicsSimulator:
     ax.clear()
     for line, label in lines:
       ax.plot(line, label=label)
+    ax.axline((CONTROL_START_IDX, 0), (CONTROL_START_IDX, 1), color='black', linestyle='--', alpha=0.5, label='Control Start')
     ax.legend()
     ax.set_title(f"{title} | Step: {self.step_idx}")
     ax.set_xlabel(axis_labels[0])
     ax.set_ylabel(axis_labels[1])
 
   def compute_cost(self) -> float:
-    target = np.array(self.target_lataccel_history)[SIM_START_IDX:]
-    pred = np.array(self.current_lataccel_history)[SIM_START_IDX:]
+    target = np.array(self.target_lataccel_history)[CONTROL_START_IDX:]
+    pred = np.array(self.current_lataccel_history)[CONTROL_START_IDX:]
 
     lat_accel_cost = np.mean((target - pred)**2)
     jerk_cost = np.mean((np.diff(pred) / DEL_T)**2)
@@ -175,7 +176,7 @@ class TinyPhysicsSimulator:
       plt.ion()
       fig, ax = plt.subplots(4, figsize=(12, 14), constrained_layout=True)
 
-    for _ in range(len(self.data)):
+    for _ in range(CONTEXT_LENGTH, len(self.data)):
       self.step()
       if self.debug and self.step_idx % 10 == 0:
         print(f"Step {self.step_idx:<5}: Current lataccel: {self.current_lataccel:>6.2f}, Target lataccel: {self.target_lataccel_history[-1]:>6.2f}")
@@ -196,8 +197,6 @@ if __name__ == "__main__":
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
-  parser.add_argument("--do_sim_step", action='store_true')
-  parser.add_argument("--do_control_step", action='store_true')
   parser.add_argument("--debug", action='store_true')
   parser.add_argument("--controller", default='simple', choices=CONTROLLERS.keys())
   args = parser.parse_args()
@@ -207,14 +206,14 @@ if __name__ == "__main__":
 
   data_path = Path(args.data_path)
   if data_path.is_file():
-    sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, args.do_sim_step, args.do_control_step, controller=controller, debug=args.debug)
+    sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, controller=controller, debug=args.debug)
     lat_accel_cost, jerk_cost = sim.rollout()
     print(f"\nAverage lat_accel_cost: {lat_accel_cost:>6.4}, average jerk_cost: {jerk_cost:>6.4}")
   elif data_path.is_dir():
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
-      sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), args.do_sim_step, args.do_control_step, controller=controller, debug=args.debug)
+      sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)
     costs = np.array(costs)
