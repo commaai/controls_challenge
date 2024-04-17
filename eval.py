@@ -46,8 +46,8 @@ def create_report(test, baseline, sample_rollouts, costs):
   for rollout in sample_rollouts:
     fig, ax = plt.subplots(figsize=(12, 3))
     ax.plot(rollout['desired_lataccel'], label='Desired Lateral Acceleration')
-    ax.plot(rollout['test_controller_lataccel'], label='Controller Lateral Acceleration')
-    ax.plot(rollout['baseline_controller_lataccel'], label='Baseline Lateral Acceleration')
+    ax.plot(rollout['test_controller_lataccel'], label='Test Controller Lateral Acceleration')
+    ax.plot(rollout['baseline_controller_lataccel'], label='Baseline Controller Lateral Acceleration')
     ax.set_xlabel('Step')
     ax.set_ylabel('Lateral Acceleration')
     ax.set_title(f"Segment: {rollout['seg']}")
@@ -56,6 +56,7 @@ def create_report(test, baseline, sample_rollouts, costs):
 
   with open("report.html", "w") as fob:
     fob.write("\n".join(res))
+    print("Report saved to: './report.html'")
 
 
 if __name__ == "__main__":
@@ -78,9 +79,9 @@ if __name__ == "__main__":
   sample_rollouts = []
   files = sorted(data_path.iterdir())[:args.num_segs]
   for d, data_file in enumerate(tqdm(files, total=len(files))):
-    test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), do_sim_step=True, do_control_step=True, controller=test_controller, debug=False)
+    test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=test_controller, debug=False)
     test_cost = test_sim.rollout()
-    baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), do_sim_step=True, do_control_step=True, controller=baseline_controller, debug=False)
+    baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=baseline_controller, debug=False)
     baseline_cost = baseline_sim.rollout()
 
     if d < SAMPLE_ROLLOUTS:

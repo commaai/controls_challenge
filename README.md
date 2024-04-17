@@ -12,11 +12,11 @@ We'll be using a synthetic dataset based on the [comma-steering-control](https:/
 bash ./download_dataset.sh
 
 # Test this works
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --do_sim_step --do_control_step --debug --controller simple
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --debug --controller simple
 
 
 # Batch Metrics on lots of routes
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --do_sim_step --do_control_step --controller simple
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller simple
 
 # Generate a report comparing two controllers
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller zero
