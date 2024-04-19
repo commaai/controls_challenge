@@ -25,6 +25,7 @@ LATACCEL_RANGE = [-5, 5]
 STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
+LAT_ACCEL_COST_MULTIPLIER = 5.0
 
 State = namedtuple('State', ['roll_lataccel', 'v_ego', 'a_ego'])
 
@@ -167,9 +168,10 @@ class TinyPhysicsSimulator:
     target = np.array(self.target_lataccel_history)[CONTROL_START_IDX:]
     pred = np.array(self.current_lataccel_history)[CONTROL_START_IDX:]
 
-    lat_accel_cost = np.mean((target - pred)**2)
-    jerk_cost = np.mean((np.diff(pred) / DEL_T)**2)
-    return lat_accel_cost, jerk_cost
+    lat_accel_cost = np.mean((target - pred)**2) * 100
+    jerk_cost = np.mean((np.diff(pred) / DEL_T)**2) * 100
+    total_cost = (lat_accel_cost * LAT_ACCEL_COST_MULTIPLIER) + jerk_cost
+    return {'lataccel_cost': lat_accel_cost, 'jerk_cost': jerk_cost, 'total_cost': total_cost}
 
   def rollout(self) -> None:
     if self.debug:
@@ -207,8 +209,8 @@ if __name__ == "__main__":
   data_path = Path(args.data_path)
   if data_path.is_file():
     sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, controller=controller, debug=args.debug)
-    lat_accel_cost, jerk_cost = sim.rollout()
-    print(f"\nAverage lat_accel_cost: {lat_accel_cost:>6.4}, average jerk_cost: {jerk_cost:>6.4}")
+    costs = sim.rollout()
+    print(f"\nAverage lataccel_cost: {costs['lataccel_cost']:>6.4}, average jerk_cost: {costs['jerk_cost']:>6.4}, average total_cost: {costs['total_cost']:>6.4}")
   elif data_path.is_dir():
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
@@ -216,10 +218,10 @@ if __name__ == "__main__":
       sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)
-    costs = np.array(costs)
-    print(f"\nAverage lat_accel_cost: {np.mean(costs[:, 0]):>6.4}, average jerk_cost: {np.mean(costs[:, 1]):>6.4}")
-    plt.hist(costs[:, 0], bins=np.arange(0, 2, 0.1), label='lat_accel_cost', alpha=0.5)
-    plt.hist(costs[:, 1], bins=np.arange(0, 2, 0.1), label='jerk_cost', alpha=0.5)
+    costs_df = pd.DataFrame(costs)
+    print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")
+    for cost in costs_df.columns:
+      plt.hist(costs[cost], bins=np.arange(0, 2, 0.1), label=cost, alpha=0.5)
     plt.xlabel('costs')
     plt.ylabel('Frequency')
     plt.title('costs Distribution')

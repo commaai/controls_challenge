@@ -30,21 +30,22 @@ def create_report(test, baseline, sample_rollouts, costs):
 
   res.append("<h2>Aggregate Costs</h2>")
   res_df = pd.DataFrame(costs)
-  fig, axs = plt.subplots(ncols=2, figsize=(12, 6))
-  for ax, cost in zip(axs, ['lataccel_cost', 'jerk_cost']):
-    ax.hist(res_df[res_df['controller'] == 'test'][cost], bins=np.arange(0, 1, 0.01), alpha=0.5, label='test')
-    ax.hist(res_df[res_df['controller'] == 'baseline'][cost], bins=np.arange(0, 1, 0.01), alpha=0.5, label='baseline')
-    ax.set_xlabel('Lateral Acceleration Cost')
+  fig, axs = plt.subplots(ncols=3, figsize=(18, 6), sharey=True)
+  bins = np.arange(0, 1000, 10)
+  for ax, cost in zip(axs, ['lataccel_cost', 'jerk_cost', 'total_cost']):
+    for controller in ['test', 'baseline']:
+      ax.hist(res_df[res_df['controller'] == controller][cost], bins=bins, label=controller, alpha=0.5)
+    ax.set_xlabel('Cost')
     ax.set_ylabel('Frequency')
     ax.set_title(f'Cost Distribution: {cost}')
     ax.legend()
 
   res.append(f'<img src="data:image/png;base64,{img2base64(fig)}" alt="Plot">')
-  res.append(res_df.groupby('controller').agg({'lataccel_cost': 'mean', 'jerk_cost': 'mean'}).round(3).reset_index().to_html(index=False))
+  res.append(res_df.groupby('controller').agg({'lataccel_cost': 'mean', 'jerk_cost': 'mean', 'total_cost': 'mean'}).round(3).reset_index().to_html(index=False))
 
   res.append("<h2>Sample Rollouts</h2>")
-  for rollout in sample_rollouts:
-    fig, ax = plt.subplots(figsize=(12, 3))
+  fig, axs = plt.subplots(ncols=1, nrows=SAMPLE_ROLLOUTS, figsize=(15, 3 * SAMPLE_ROLLOUTS), sharex=True)
+  for ax, rollout in zip(axs, sample_rollouts):
     ax.plot(rollout['desired_lataccel'], label='Desired Lateral Acceleration')
     ax.plot(rollout['test_controller_lataccel'], label='Test Controller Lateral Acceleration')
     ax.plot(rollout['baseline_controller_lataccel'], label='Baseline Controller Lateral Acceleration')
@@ -52,7 +53,8 @@ def create_report(test, baseline, sample_rollouts, costs):
     ax.set_ylabel('Lateral Acceleration')
     ax.set_title(f"Segment: {rollout['seg']}")
     ax.legend()
-    res.append(f'<img src="data:image/png;base64,{img2base64(fig)}" alt="Plot">')
+  fig.tight_layout()
+  res.append(f'<img src="data:image/png;base64,{img2base64(fig)}" alt="Plot">')
 
   with open("report.html", "w") as fob:
     fob.write("\n".join(res))
@@ -94,7 +96,7 @@ if __name__ == "__main__":
         'baseline_controller_lataccel': baseline_sim.current_lataccel_history,
       })
 
-    costs.append({'seg': data_file.stem, 'controller': 'test', 'lataccel_cost': test_cost[0], 'jerk_cost': test_cost[1]})
-    costs.append({'seg': data_file.stem, 'controller': 'baseline', 'lataccel_cost': baseline_cost[0], 'jerk_cost': baseline_cost[1]})
+    costs.append({'seg': data_file.stem, 'controller': 'test', **test_cost})
+    costs.append({'seg': data_file.stem, 'controller': 'baseline', **baseline_cost})
 
   create_report(args.test_controller, args.baseline_controller, sample_rollouts, costs)

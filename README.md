@@ -19,7 +19,7 @@ python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/
 python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller simple
 
 # Generate a report comparing two controllers
-python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller zero
+python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller open
 
 ```
 
@@ -34,9 +34,14 @@ Your controller should implement an [update function](https://github.com/commaai
 
 ## Evaluation
 Each rollout will result in 2 costs:
-- `lat_accel_cost`: $\dfrac{\Sigma(actual\_lat\_accel - target\_lat\_accel)^2}{steps}$
+- `lataccel_cost`: $\dfrac{\Sigma(actual\_lat\_accel - target\_lat\_accel)^2}{steps} * 100$
 
-- `jerk_cost`: $\dfrac{\Sigma((actual\_lat\_accel_{t} - actual\_lat\_accel_{t-1}) / \Delta t)^2}{steps - 1}$
+- `jerk_cost`: $\dfrac{\Sigma((actual\_lat\_accel_{t} - actual\_lat\_accel_{t-1}) / \Delta t)^2}{steps - 1} * 100$
 
+It is important to minimize both costs. `total_cost`: $(lataccel\_cost *5) + jerk\_cost$
 
-Minimizing both costs are very important.
+## Submission
+Run the following command, and send us a link to your fork of this repo, and the `report.html` this script generates.
+```
+python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller simple
+```

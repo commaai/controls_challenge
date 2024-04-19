@@ -3,9 +3,9 @@ class BaseController:
     raise NotImplementedError
 
 
-class ZeroController(BaseController):
+class OpenController(BaseController):
   def update(self, target_lataccel, current_lataccel, state):
-    return 0.
+    return target_lataccel
 
 
 class SimpleController(BaseController):
@@ -14,6 +14,6 @@ class SimpleController(BaseController):
 
 
 CONTROLLERS = {
-  'zero': ZeroController,
+  'open': OpenController,
   'simple': SimpleController,
 }
