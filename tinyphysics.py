@@ -221,8 +221,9 @@ if __name__ == "__main__":
     costs_df = pd.DataFrame(costs)
     print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")
     for cost in costs_df.columns:
-      plt.hist(costs[cost], bins=np.arange(0, 2, 0.1), label=cost, alpha=0.5)
+      plt.hist(costs_df[cost], bins=np.arange(0, 1000, 10), label=cost, alpha=0.5)
     plt.xlabel('costs')
     plt.ylabel('Frequency')
     plt.title('costs Distribution')
+    plt.legend()
     plt.show()

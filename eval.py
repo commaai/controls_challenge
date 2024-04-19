@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
 
-from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROLLERS
+from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROLLERS, CONTROL_START_IDX
 
 sns.set_theme()
 SAMPLE_ROLLOUTS = 5
@@ -52,6 +52,7 @@ def create_report(test, baseline, sample_rollouts, costs):
     ax.set_xlabel('Step')
     ax.set_ylabel('Lateral Acceleration')
     ax.set_title(f"Segment: {rollout['seg']}")
+    ax.axline((CONTROL_START_IDX, 0), (CONTROL_START_IDX, 1), color='black', linestyle='--', alpha=0.5, label='Control Start')
     ax.legend()
   fig.tight_layout()
   res.append(f'<img src="data:image/png;base64,{img2base64(fig)}" alt="Plot">')
