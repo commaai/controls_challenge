@@ -122,9 +122,9 @@ class TinyPhysicsSimulator:
 
   def sim_step(self, step_idx: int) -> None:
     pred = self.sim_model.get_current_lataccel(
-      sim_states=self.state_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
-      actions=self.action_history[max(0, step_idx - CONTEXT_LENGTH):step_idx],
-      past_preds=self.current_lataccel_history[max(0, step_idx - CONTEXT_LENGTH):step_idx]
+      sim_states=self.state_history[-CONTEXT_LENGTH:],
+      actions=self.action_history[-CONTEXT_LENGTH:],
+      past_preds=self.current_lataccel_history[-CONTEXT_LENGTH:]
     )
     pred = np.clip(pred, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
     if step_idx >= CONTROL_START_IDX:
