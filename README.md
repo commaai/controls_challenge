@@ -11,18 +11,23 @@ We'll be using a synthetic dataset based on the [comma-steering-control](https:/
 # download necessary dataset (~0.6G)
 bash ./download_dataset.sh
 
-# Test this works
+# install required packages
+pip install -r requirements.txt
+
+# test this works
 python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --debug --controller simple
+```
 
-
-# Batch Metrics on lots of routes
+There are some other scripts to help you get aggregate metrics: 
+```
+# batch Metrics of a controller on lots of routes
 python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller simple
 
-# Generate a report comparing two controllers
+# generate a report comparing two controllers
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller open
 
 ```
-There's also a notebook at `experiment.ipynb`, to explore.
+You can also use the notebook at [`experiment.ipynb`](https://github.com/commaai/controls_challenge/blob/master/experiment.ipynb) for exploration.
 
 ## TinyPhysics
 This is a "simulated car" that has been trained to mimic a very simple physics model (bicycle model) based simulator, given realistic driving noise. It is an autoregressive model similar to [ML Controls Sim](https://blog.comma.ai/096release/#ml-controls-sim) in architecture. It's inputs are the car velocity (`v_ego`), forward acceleration (`a_ego`), lateral acceleration due to road roll (`road_lataccel`), current car lateral acceleration (`current_lataccel`) and a steer input (`steer_action`) and predicts the resultant lateral acceleration fo the car.
