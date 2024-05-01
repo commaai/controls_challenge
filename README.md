@@ -39,11 +39,11 @@ Your controller should implement an [update function](https://github.com/commaai
 
 ## Evaluation
 Each rollout will result in 2 costs:
-- `lataccel_cost`: $\dfrac{\Sigma(actual\_lat\_accel - target\_lat\_accel)^2}{steps} * 100$
+- `lataccel_cost`: $\dfrac{\Sigma(actual\\_lat\\_accel - target\\_lat\\_accel)^2}{steps} * 100$
 
-- `jerk_cost`: $\dfrac{\Sigma((actual\_lat\_accel_{t} - actual\_lat\_accel_{t-1}) / \Delta t)^2}{steps - 1} * 100$
+- `jerk_cost`: $\dfrac{\Sigma((actual\\_lat\\_accel\_t - actual\\_lat\\_accel\_{t-1}) / \Delta t)^2}{steps - 1} * 100$
 
-It is important to minimize both costs. `total_cost`: $(lataccel\_cost *5) + jerk\_cost$
+It is important to minimize both costs. `total_cost`: $(lataccel\\_cost *5) + jerk\\_cost$
 
 ## Submission
 Run the following command, and send us a link to your fork of this repo, and the `report.html` this script generates.
