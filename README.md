@@ -50,3 +50,7 @@ Run the following command, and send us a link to your fork of this repo, and the
 ```
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller simple
 ```
+
+## Work at comma
+Like this sort of stuff? You might want to work at comma!
+https://www.comma.ai/jobs
