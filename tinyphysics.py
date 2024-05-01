@@ -96,7 +96,6 @@ class TinyPhysicsSimulator:
     self.data = self.get_data(data_path)
     self.controller = controller
     self.debug = debug
-    self.times = []
     self.reset()
 
   def reset(self) -> None:
