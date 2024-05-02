@@ -69,7 +69,7 @@ class TinyPhysicsModel:
     e_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
     return e_x / np.sum(e_x, axis=axis, keepdims=True)
 
-  def predict(self, input_data: dict, temperature=1.) -> dict:
+  def predict(self, input_data: dict, temperature=1.) -> int:
     res = self.ort_session.run(None, input_data)[0]
     probs = self.softmax(res / temperature, axis=-1)
     # we only care about the last timestep (batch size is just 1)
@@ -96,7 +96,6 @@ class TinyPhysicsSimulator:
     self.data = self.get_data(data_path)
     self.controller = controller
     self.debug = debug
-    self.times = []
     self.reset()
 
   def reset(self) -> None:
@@ -142,7 +141,7 @@ class TinyPhysicsSimulator:
     action = np.clip(action, STEER_RANGE[0], STEER_RANGE[1])
     self.action_history.append(action)
 
-  def get_state_target(self, step_idx: int) -> Tuple[List, float]:
+  def get_state_target(self, step_idx: int) -> Tuple[State, float]:
     state = self.data.iloc[step_idx]
     return State(roll_lataccel=state['roll_lataccel'], v_ego=state['v_ego'], a_ego=state['a_ego']), state['target_lataccel']
 
@@ -164,7 +163,7 @@ class TinyPhysicsSimulator:
     ax.set_xlabel(axis_labels[0])
     ax.set_ylabel(axis_labels[1])
 
-  def compute_cost(self) -> float:
+  def compute_cost(self) -> dict:
     target = np.array(self.target_lataccel_history)[CONTROL_START_IDX:]
     pred = np.array(self.current_lataccel_history)[CONTROL_START_IDX:]
 
@@ -173,7 +172,7 @@ class TinyPhysicsSimulator:
     total_cost = (lat_accel_cost * LAT_ACCEL_COST_MULTIPLIER) + jerk_cost
     return {'lataccel_cost': lat_accel_cost, 'jerk_cost': jerk_cost, 'total_cost': total_cost}
 
-  def rollout(self) -> None:
+  def rollout(self) -> float:
     if self.debug:
       plt.ion()
       fig, ax = plt.subplots(4, figsize=(12, 14), constrained_layout=True)
