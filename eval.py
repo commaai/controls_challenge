@@ -72,8 +72,6 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=False)
-  test_controller = CONTROLLERS[args.test_controller]()
-  baseline_controller = CONTROLLERS[args.baseline_controller]()
 
   data_path = Path(args.data_path)
   assert data_path.is_dir(), "data_path should be a directory"
@@ -82,6 +80,8 @@ if __name__ == "__main__":
   sample_rollouts = []
   files = sorted(data_path.iterdir())[:args.num_segs]
   for d, data_file in enumerate(tqdm(files, total=len(files))):
+    test_controller = CONTROLLERS[args.test_controller]()
+    baseline_controller = CONTROLLERS[args.baseline_controller]()
     test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=test_controller, debug=False)
     test_cost = test_sim.rollout()
     baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=baseline_controller, debug=False)

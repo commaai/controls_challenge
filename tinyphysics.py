@@ -203,10 +203,10 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=args.debug)
-  controller = CONTROLLERS[args.controller]()
 
   data_path = Path(args.data_path)
   if data_path.is_file():
+    controller = CONTROLLERS[args.controller]()
     sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, controller=controller, debug=args.debug)
     costs = sim.rollout()
     print(f"\nAverage lataccel_cost: {costs['lataccel_cost']:>6.4}, average jerk_cost: {costs['jerk_cost']:>6.4}, average total_cost: {costs['total_cost']:>6.4}")
@@ -214,6 +214,7 @@ if __name__ == "__main__":
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
+      controller = CONTROLLERS[args.controller]()
       sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)
