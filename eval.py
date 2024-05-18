@@ -1,17 +1,18 @@
 import argparse
 import base64
-import importlib
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
 
+from functools import partial
 from io import BytesIO
 from matplotlib import pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
-from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROL_START_IDX, get_available_controllers
+from tinyphysics import CONTROL_START_IDX, get_available_controllers, run_rollout
 
 sns.set_theme()
 SAMPLE_ROLLOUTS = 5
@@ -73,33 +74,32 @@ if __name__ == "__main__":
   parser.add_argument("--baseline_controller", default='simple', choices=available_controllers)
   args = parser.parse_args()
 
-  tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=False)
-
   data_path = Path(args.data_path)
   assert data_path.is_dir(), "data_path should be a directory"
 
   costs = []
   sample_rollouts = []
   files = sorted(data_path.iterdir())[:args.num_segs]
-  for d, data_file in enumerate(tqdm(files, total=len(files))):
-    test_controller = importlib.import_module(f'controllers.{args.test_controller}').Controller()
-    baseline_controller = importlib.import_module(f'controllers.{args.baseline_controller}').Controller()
-    test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=test_controller, debug=False)
-    test_cost = test_sim.rollout()
-    baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=baseline_controller, debug=False)
-    baseline_cost = baseline_sim.rollout()
+  print("Running rollouts for visualizations...")
+  for d, data_file in enumerate(tqdm(files[:SAMPLE_ROLLOUTS], total=SAMPLE_ROLLOUTS)):
+    test_cost, test_target_lataccel, test_current_lataccel = run_rollout(data_file, args.test_controller, args.model_path, debug=False)
+    baseline_cost, baseline_target_lataccel, baseline_current_lataccel = run_rollout(data_file, args.baseline_controller, args.model_path, debug=False)
+    sample_rollouts.append({
+      'seg': data_file.stem,
+      'test_controller': args.test_controller,
+      'baseline_controller': args.baseline_controller,
+      'desired_lataccel': test_target_lataccel,
+      'test_controller_lataccel': test_current_lataccel,
+      'baseline_controller_lataccel': baseline_current_lataccel,
+    })
 
-    if d < SAMPLE_ROLLOUTS:
-      sample_rollouts.append({
-        'seg': data_file.stem,
-        'test_controller': args.test_controller,
-        'baseline_controller': args.baseline_controller,
-        'desired_lataccel': test_sim.target_lataccel_history,
-        'test_controller_lataccel': test_sim.current_lataccel_history,
-        'baseline_controller_lataccel': baseline_sim.current_lataccel_history,
-      })
+    costs.append({'controller': 'test', **test_cost})
+    costs.append({'controller': 'baseline', **baseline_cost})
 
-    costs.append({'seg': data_file.stem, 'controller': 'test', **test_cost})
-    costs.append({'seg': data_file.stem, 'controller': 'baseline', **baseline_cost})
+  for controller_cat, controller_type in [('baseline', args.baseline_controller), ('test', args.test_controller)]:
+    print(f"Running batch rollouts => {controller_cat} controller: {controller_type}")
+    rollout_partial = partial(run_rollout, controller_type=controller_type, model_path=args.model_path, debug=False)
+    results = process_map(rollout_partial, files[SAMPLE_ROLLOUTS:], max_workers=16)
+    costs += [{'controller': controller_cat, **result[0]} for result in results]
 
   create_report(args.test_controller, args.baseline_controller, sample_rollouts, costs)
