@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import numpy as np
 import onnxruntime as ort
 import pandas as pd
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import List, Union, Tuple
 from tqdm import tqdm
 
-from controllers import BaseController, CONTROLLERS
+from controllers import BaseController
 
 sns.set_theme()
 signal.signal(signal.SIGINT, signal.SIG_DFL)  # Enable Ctrl-C on plot windows
@@ -193,20 +194,25 @@ class TinyPhysicsSimulator:
     return self.compute_cost()
 
 
+def get_available_controllers():
+  return [f.stem for f in Path('controllers').iterdir() if f.is_file() and f.suffix == '.py' and f.stem != '__init__']
+
+
 if __name__ == "__main__":
+  available_controllers = get_available_controllers()
   parser = argparse.ArgumentParser()
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
   parser.add_argument("--debug", action='store_true')
-  parser.add_argument("--controller", default='simple', choices=CONTROLLERS.keys())
+  parser.add_argument("--controller", default='simple', choices=available_controllers)
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=args.debug)
 
   data_path = Path(args.data_path)
   if data_path.is_file():
-    controller = CONTROLLERS[args.controller]()
+    controller = importlib.import_module(f'controllers.{args.controller}').Controller()
     sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, controller=controller, debug=args.debug)
     costs = sim.rollout()
     print(f"\nAverage lataccel_cost: {costs['lataccel_cost']:>6.4}, average jerk_cost: {costs['jerk_cost']:>6.4}, average total_cost: {costs['total_cost']:>6.4}")
@@ -214,7 +220,7 @@ if __name__ == "__main__":
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
-      controller = CONTROLLERS[args.controller]()
+      controller = importlib.import_module(f'controllers.{args.controller}').Controller()
       sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-script:
+  rollout:
     runs-on: ubuntu-20.04
     
     steps:
