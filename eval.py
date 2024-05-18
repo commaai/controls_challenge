@@ -1,5 +1,6 @@
 import argparse
 import base64
+import importlib
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -10,7 +11,7 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
 
-from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROLLERS, CONTROL_START_IDX
+from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROL_START_IDX, get_available_controllers
 
 sns.set_theme()
 SAMPLE_ROLLOUTS = 5
@@ -63,12 +64,13 @@ def create_report(test, baseline, sample_rollouts, costs):
 
 
 if __name__ == "__main__":
+  available_controllers = get_available_controllers()
   parser = argparse.ArgumentParser()
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
-  parser.add_argument("--test_controller", default='simple', choices=CONTROLLERS.keys())
-  parser.add_argument("--baseline_controller", default='simple', choices=CONTROLLERS.keys())
+  parser.add_argument("--test_controller", default='simple', choices=available_controllers)
+  parser.add_argument("--baseline_controller", default='simple', choices=available_controllers)
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=False)
@@ -80,8 +82,8 @@ if __name__ == "__main__":
   sample_rollouts = []
   files = sorted(data_path.iterdir())[:args.num_segs]
   for d, data_file in enumerate(tqdm(files, total=len(files))):
-    test_controller = CONTROLLERS[args.test_controller]()
-    baseline_controller = CONTROLLERS[args.baseline_controller]()
+    test_controller = importlib.import_module(f'controllers.{args.test_controller}').Controller()
+    baseline_controller = importlib.import_module(f'controllers.{args.baseline_controller}').Controller()
     test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=test_controller, debug=False)
     test_cost = test_sim.rollout()
     baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=baseline_controller, debug=False)
