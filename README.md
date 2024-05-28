@@ -47,7 +47,8 @@ Each rollout will result in 2 costs:
 It is important to minimize both costs. `total_cost`: $(lataccel\\_cost *5) + jerk\\_cost$
 
 ## Submission
-Run the following command, and send us a link to your fork of this repo, and the `report.html` this script generates.
+Run the following command, and submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
+
 ```
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller simple
 ```
