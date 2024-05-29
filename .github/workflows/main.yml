@@ -31,12 +31,12 @@ jobs:
       
       - name: Run Simple controller rollout
         run: |
-          python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --controller simple
+          python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --controller pid
       
       - name: Run batch rollouts
         run: |
-          python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 20 --controller simple
+          python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 20 --controller pid
 
       - name: Run report
         run: |
-          python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 50 --test_controller open --baseline_controller simple
+          python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 50 --test_controller zero --baseline_controller pid

@@ -70,8 +70,8 @@ if __name__ == "__main__":
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
-  parser.add_argument("--test_controller", default='simple', choices=available_controllers)
-  parser.add_argument("--baseline_controller", default='simple', choices=available_controllers)
+  parser.add_argument("--test_controller", default='pid', choices=available_controllers)
+  parser.add_argument("--baseline_controller", default='pid', choices=available_controllers)
   args = parser.parse_args()
 
   data_path = Path(args.data_path)

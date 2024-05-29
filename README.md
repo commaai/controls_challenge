@@ -16,16 +16,16 @@ bash ./download_dataset.sh
 pip install -r requirements.txt
 
 # test this works
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --debug --controller simple
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --debug --controller pid 
 ```
 
 There are some other scripts to help you get aggregate metrics: 
 ```
 # batch Metrics of a controller on lots of routes
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller simple
+python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller pid
 
 # generate a report comparing two controllers
-python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller simple --baseline_controller open
+python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller pid --baseline_controller zero
 
 ```
 You can also use the notebook at [`experiment.ipynb`](https://github.com/commaai/controls_challenge/blob/master/experiment.ipynb) for exploration.
@@ -44,13 +44,13 @@ Each rollout will result in 2 costs:
 
 - `jerk_cost`: $\dfrac{\Sigma((actual\\_lat\\_accel\_t - actual\\_lat\\_accel\_{t-1}) / \Delta t)^2}{steps - 1} * 100$
 
-It is important to minimize both costs. `total_cost`: $(lataccel\\_cost *5) + jerk\\_cost$
+It is important to minimize both costs. `total_cost`: $(lataccel\\_cost * 50) + jerk\\_cost$
 
 ## Submission
 Run the following command, and submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
 
 ```
-python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller simple
+python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller pid
 ```
 
 ## Work at comma

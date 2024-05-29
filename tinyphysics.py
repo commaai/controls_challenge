@@ -29,7 +29,7 @@ LATACCEL_RANGE = [-5, 5]
 STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
-LAT_ACCEL_COST_MULTIPLIER = 5.0
+LAT_ACCEL_COST_MULTIPLIER = 50.0
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
   parser.add_argument("--debug", action='store_true')
-  parser.add_argument("--controller", default='simple', choices=available_controllers)
+  parser.add_argument("--controller", default='pid', choices=available_controllers)
   args = parser.parse_args()
 
   data_path = Path(args.data_path)
