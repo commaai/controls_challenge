@@ -49,7 +49,7 @@ def create_report(test, baseline, sample_rollouts, costs, num_segs):
     <body style="font-family: 'JetBrains Mono', monospace; margin: 20px; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center">
     """)
   res.append("<h1 style='font-size: 50px; font-weight: 700; text-align: center'>Comma Controls Challenge: Report</h1>")
-  res.append(f"<h3 style='font-size: 30px;'><span style='background: {COLORS['test']}; color: #fff; padding: 10px'>Test Controller: {test}</span> | <span style='background: {COLORS['baseline']}; color: #fff; padding: 10px'>Baseline Controller: {baseline}</span></h3>")
+  res.append(f"<h3 style='font-size: 30px;'><span style='background: {COLORS['test']}; color: #fff; padding: 10px'>Test Controller: {test}</span> ⚔️ <span style='background: {COLORS['baseline']}; color: #fff; padding: 10px'>Baseline Controller: {baseline}</span></h3>")
 
   res.append(f"<h2 style='font-size: 30px; margin-top: 50px'>Aggregate Costs (total rollouts: {num_segs})</h2>")
   res_df = pd.DataFrame(costs)
