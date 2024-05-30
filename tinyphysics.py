@@ -22,14 +22,14 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)  # Enable Ctrl-C on plot windows
 ACC_G = 9.81
 FPS = 10
 CONTROL_START_IDX = 100
-COST_END_IDX = 550
+COST_END_IDX = 500
 CONTEXT_LENGTH = 20
 VOCAB_SIZE = 1024
 LATACCEL_RANGE = [-5, 5]
 STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
-LAT_ACCEL_COST_MULTIPLIER = 5.0
+LAT_ACCEL_COST_MULTIPLIER = 50.0
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
 
@@ -86,7 +86,7 @@ class TinyPhysicsModel:
       'states': np.expand_dims(states, axis=0).astype(np.float32),
       'tokens': np.expand_dims(tokenized_actions, axis=0).astype(np.int64)
     }
-    return self.tokenizer.decode(self.predict(input_data, temperature=1.))
+    return self.tokenizer.decode(self.predict(input_data, temperature=0.8))
 
 
 class TinyPhysicsSimulator:
@@ -148,10 +148,10 @@ class TinyPhysicsSimulator:
       State(roll_lataccel=state['roll_lataccel'], v_ego=state['v_ego'], a_ego=state['a_ego']),
       state['target_lataccel'],
       FuturePlan(
-        lataccel=self.data['target_lataccel'].values[step_idx + 1 :step_idx + FUTURE_PLAN_STEPS].tolist(),
-        roll_lataccel=self.data['roll_lataccel'].values[step_idx + 1 :step_idx + FUTURE_PLAN_STEPS].tolist(),
-        v_ego=self.data['v_ego'].values[step_idx + 1 :step_idx + FUTURE_PLAN_STEPS].tolist(),
-        a_ego=self.data['a_ego'].values[step_idx + 1 :step_idx + FUTURE_PLAN_STEPS].tolist()
+        lataccel=self.data['target_lataccel'].values[step_idx + 1:step_idx + FUTURE_PLAN_STEPS].tolist(),
+        roll_lataccel=self.data['roll_lataccel'].values[step_idx + 1:step_idx + FUTURE_PLAN_STEPS].tolist(),
+        v_ego=self.data['v_ego'].values[step_idx + 1:step_idx + FUTURE_PLAN_STEPS].tolist(),
+        a_ego=self.data['a_ego'].values[step_idx + 1:step_idx + FUTURE_PLAN_STEPS].tolist()
       )
     )
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
   parser.add_argument("--debug", action='store_true')
-  parser.add_argument("--controller", default='simple', choices=available_controllers)
+  parser.add_argument("--controller", default='pid', choices=available_controllers)
   args = parser.parse_args()
 
   data_path = Path(args.data_path)
@@ -232,7 +232,7 @@ if __name__ == "__main__":
   elif data_path.is_dir():
     run_rollout_partial = partial(run_rollout, controller_type=args.controller, model_path=args.model_path, debug=False)
     files = sorted(data_path.iterdir())[:args.num_segs]
-    results = process_map(run_rollout_partial, files, max_workers=16)
+    results = process_map(run_rollout_partial, files, max_workers=16, chunksize=10)
     costs = [result[0] for result in results]
     costs_df = pd.DataFrame(costs)
     print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")

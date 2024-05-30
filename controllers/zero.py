@@ -3,7 +3,7 @@ from . import BaseController
 
 class Controller(BaseController):
   """
-  An open-loop controller
+  A controller that always outputs zero
   """
   def update(self, target_lataccel, current_lataccel, state, future_plan):
-    return target_lataccel
+    return 0.0

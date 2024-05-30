@@ -70,8 +70,8 @@ if __name__ == "__main__":
   parser.add_argument("--model_path", type=str, required=True)
   parser.add_argument("--data_path", type=str, required=True)
   parser.add_argument("--num_segs", type=int, default=100)
-  parser.add_argument("--test_controller", default='simple', choices=available_controllers)
-  parser.add_argument("--baseline_controller", default='simple', choices=available_controllers)
+  parser.add_argument("--test_controller", default='pid', choices=available_controllers)
+  parser.add_argument("--baseline_controller", default='pid', choices=available_controllers)
   args = parser.parse_args()
 
   data_path = Path(args.data_path)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
   for controller_cat, controller_type in [('baseline', args.baseline_controller), ('test', args.test_controller)]:
     print(f"Running batch rollouts => {controller_cat} controller: {controller_type}")
     rollout_partial = partial(run_rollout, controller_type=controller_type, model_path=args.model_path, debug=False)
-    results = process_map(rollout_partial, files[SAMPLE_ROLLOUTS:], max_workers=16)
+    results = process_map(rollout_partial, files[SAMPLE_ROLLOUTS:], max_workers=16, chunksize=10)
     costs += [{'controller': controller_cat, **result[0]} for result in results]
 
   create_report(args.test_controller, args.baseline_controller, sample_rollouts, costs)
