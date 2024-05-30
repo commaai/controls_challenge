@@ -86,7 +86,7 @@ class TinyPhysicsModel:
       'states': np.expand_dims(states, axis=0).astype(np.float32),
       'tokens': np.expand_dims(tokenized_actions, axis=0).astype(np.int64)
     }
-    return self.tokenizer.decode(self.predict(input_data, temperature=1.))
+    return self.tokenizer.decode(self.predict(input_data, temperature=0.8))
 
 
 class TinyPhysicsSimulator:
