@@ -102,7 +102,7 @@ class TinyPhysicsSimulator:
     self.step_idx = CONTEXT_LENGTH
     state_target_futureplans = [self.get_state_target_futureplan(i) for i in range(self.step_idx)]
     self.state_history = [x[0] for x in state_target_futureplans]
-    self.action_history = self.data['steer_command'].values[:self.step_idx].tolist()
+    self.action_history = (-self.data['steer_command'].values[:self.step_idx]).tolist()
     self.current_lataccel_history = [x[1] for x in state_target_futureplans]
     self.target_lataccel_history = [x[1] for x in state_target_futureplans]
     self.target_future = None
@@ -138,7 +138,7 @@ class TinyPhysicsSimulator:
   def control_step(self, step_idx: int) -> None:
     action = self.controller.update(self.target_lataccel_history[step_idx], self.current_lataccel, self.state_history[step_idx], future_plan=self.futureplan)
     if step_idx < CONTROL_START_IDX:
-      action = self.data['steer_command'].values[step_idx]
+      action = -self.data['steer_command'].values[step_idx]
     action = np.clip(action, STEER_RANGE[0], STEER_RANGE[1])
     self.action_history.append(action)
 
