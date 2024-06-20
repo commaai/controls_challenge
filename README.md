@@ -53,6 +53,10 @@ Run the following command, and submit `report.html` and your code to [this form]
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller pid
 ```
 
+## Changelog
+- With [this commit](https://github.com/commaai/controls_challenge/commit/fdafbc64868b70d6ec9c305ab5b52ec501ea4e4f) we made the simulator more robust to outlier actions and changed the cost landscape to incentivize more aggressive and interesting solutions.
+- With [this commit](https://github.com/commaai/controls_challenge/commit/4282a06183c10d2f593fc891b6bc7a0859264e88) we fixed a bug that caused the simulator model to be initialized wrong.
+
 ## Work at comma
 Like this sort of stuff? You might want to work at comma!
 https://www.comma.ai/jobs
