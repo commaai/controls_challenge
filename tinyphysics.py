@@ -117,7 +117,7 @@ class TinyPhysicsSimulator:
       'v_ego': df['vEgo'].values,
       'a_ego': df['aEgo'].values,
       'target_lataccel': df['targetLateralAcceleration'].values,
-      'steer_command': df['steerCommand'].values
+      'steer_command': -df['steerCommand'].values  # steer commands are logged with left-positive convention but this simulator uses right-positive
     })
     return processed_df
 
