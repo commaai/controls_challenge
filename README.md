@@ -2,11 +2,13 @@
 <h1>comma Controls Challenge!</h1>
 
 <h3>
-  <a href="https://docs.comma.ai">Leaderboard</a>
+  <a href="https://comma.ai/leaderboard">Leaderboard</a>
   <span> · </span>
   <a href="https://comma.ai/jobs">comma.ai/jobs</a>
   <span> · </span>
   <a href="https://discord.comma.ai">Discord</a>
+  <span> · </span>
+  <a href="https://x.com/comma_ai">X</a>
 </h3>
 
 </div>
