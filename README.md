@@ -1,4 +1,15 @@
-# comma Controls Challenge!
+<div align="center">
+<h1>comma Controls Challenge!</h1>
+
+<h3>
+  <a href="https://docs.comma.ai">Leaderboard</a>
+  <span> · </span>
+  <a href="https://comma.ai/jobs">comma.ai/jobs</a>
+  <span> · </span>
+  <a href="https://discord.comma.ai">Discord</a>
+</h3>
+
+</div>
 
 Machine learning models can drive cars, paint beautiful pictures and write passable rap. But they famously suck at doing low level controls. Your goal is to write a good controller. This repo contains a model that simulates the lateral movement of a car, given steering commands. The goal is to drive this "car" well for a given desired trajectory.
 
