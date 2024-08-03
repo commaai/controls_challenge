@@ -1,4 +1,4 @@
-numpy==1.25.2
+numpy
 onnxruntime
 pandas==2.1.2
 matplotlib==3.8.1

@@ -2,11 +2,15 @@ import argparse
 import importlib
 import numpy as np
 import onnxruntime as ort
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import signal
+import urllib.request
+import zipfile
 
+from io import BytesIO
 from collections import namedtuple
 from functools import partial
 from hashlib import md5
@@ -36,6 +40,8 @@ FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
 State = namedtuple('State', ['roll_lataccel', 'v_ego', 'a_ego'])
 FuturePlan = namedtuple('FuturePlan', ['lataccel', 'roll_lataccel', 'v_ego', 'a_ego'])
 
+DATASET_URL = "https://huggingface.co/datasets/commaai/commaSteeringControl/resolve/main/data/SYNTHETIC_V0.zip"
+DATASET_PATH = Path(__file__).resolve().parent / "data"
 
 class LataccelTokenizer:
   def __init__(self):
@@ -215,6 +221,17 @@ def run_rollout(data_path, controller_type, model_path, debug=False):
   return sim.rollout(), sim.target_lataccel_history, sim.current_lataccel_history
 
 
+def download_dataset():
+  print("Downloading dataset (0.6G)...")
+  DATASET_PATH.mkdir(parents=True, exist_ok=True)
+  with urllib.request.urlopen(DATASET_URL) as resp:
+    with zipfile.ZipFile(BytesIO(resp.read())) as z:
+      for member in z.namelist():
+        if not member.endswith('/'):
+          with z.open(member) as src, open(DATASET_PATH / os.path.basename(member), 'wb') as dest:
+            dest.write(src.read())
+
+
 if __name__ == "__main__":
   available_controllers = get_available_controllers()
   parser = argparse.ArgumentParser()
@@ -224,6 +241,9 @@ if __name__ == "__main__":
   parser.add_argument("--debug", action='store_true')
   parser.add_argument("--controller", default='pid', choices=available_controllers)
   args = parser.parse_args()
+
+  if not DATASET_PATH.exists():
+    download_dataset()
 
   data_path = Path(args.data_path)
   if data_path.is_file():

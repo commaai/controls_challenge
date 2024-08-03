@@ -1,16 +1,12 @@
-# Comma Controls Challenge!
-![Car](./imgs/car.jpg)
+# comma Controls Challenge!
 
 Machine learning models can drive cars, paint beautiful pictures and write passable rap. But they famously suck at doing low level controls. Your goal is to write a good controller. This repo contains a model that simulates the lateral movement of a car, given steering commands. The goal is to drive this "car" well for a given desired trajectory.
 
 
 ## Geting Started
-We'll be using a synthetic dataset based on the [comma-steering-control](https://github.com/commaai/comma-steering-control) dataset for this challenge. These are actual routes with actual car and road states.
+We'll be using a synthetic dataset based on the [comma-steering-control](https://github.com/commaai/comma-steering-control) dataset for this challenge. These are actual car and road states from [openpilot](https://github.com/commaai/openpilot) users.
 
 ```
-# download necessary dataset (~0.6G)
-bash ./download_dataset.sh
-
 # install required packages
 # recommended python==3.11
 pip install -r requirements.txt
@@ -58,5 +54,6 @@ python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_s
 - With [this commit](https://github.com/commaai/controls_challenge/commit/4282a06183c10d2f593fc891b6bc7a0859264e88) we fixed a bug that caused the simulator model to be initialized wrong.
 
 ## Work at comma
+
 Like this sort of stuff? You might want to work at comma!
-https://www.comma.ai/jobs
+[comma.ai/jobs](https://comma.ai/jobs)
