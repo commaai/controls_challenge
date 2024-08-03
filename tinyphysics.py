@@ -222,7 +222,7 @@ def run_rollout(data_path, controller_type, model_path, debug=False):
 
 
 def download_dataset():
-  print("Downloading dataset...")
+  print("Downloading dataset (0.6G)...")
   DATASET_PATH.mkdir(parents=True, exist_ok=True)
   with urllib.request.urlopen(DATASET_URL) as resp:
     with zipfile.ZipFile(BytesIO(resp.read())) as z:
