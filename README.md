@@ -1,5 +1,5 @@
 <div align="center">
-<h1>comma Controls Challenge!</h1>
+<h1>comma Controls Challenge v2</h1>
 
 <h3>
   <a href="https://comma.ai/leaderboard">Leaderboard</a>
