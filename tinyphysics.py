@@ -19,6 +19,8 @@ from typing import List, Union, Tuple, Dict
 from tqdm.contrib.concurrent import process_map
 
 from controllers import BaseController
+from controllers.pid import Controller  # Existing PID controller
+from controllers.sampid import Controller as SamPIDController  # Your new SamPID controller
 
 sns.set_theme()
 signal.signal(signal.SIGINT, signal.SIG_DFL)  # Enable Ctrl-C on plot windows
@@ -107,10 +109,10 @@ class TinyPhysicsSimulator:
   def reset(self) -> None:
     self.step_idx = CONTEXT_LENGTH
     state_target_futureplans = [self.get_state_target_futureplan(i) for i in range(self.step_idx)]
-    self.state_history = [x[0] for x in state_target_futureplans]
+    self.state_history = [x[0] for i, x in enumerate(state_target_futureplans) if i < CONTEXT_LENGTH]
     self.action_history = self.data['steer_command'].values[:self.step_idx].tolist()
-    self.current_lataccel_history = [x[1] for x in state_target_futureplans]
-    self.target_lataccel_history = [x[1] for x in state_target_futureplans]
+    self.current_lataccel_history = [x[1] for i, x in enumerate(state_target_futureplans) if i < CONTEXT_LENGTH]
+    self.target_lataccel_history = [x[1] for i, x in enumerate(state_target_futureplans) if i < CONTEXT_LENGTH]
     self.target_future = None
     self.current_lataccel = self.current_lataccel_history[-1]
     seed = int(md5(self.data_path.encode()).hexdigest(), 16) % 10**4
@@ -263,3 +265,4 @@ if __name__ == "__main__":
     plt.title('costs Distribution')
     plt.legend()
     plt.show()
+ 
