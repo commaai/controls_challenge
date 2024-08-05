@@ -6,9 +6,9 @@ class Controller(BaseController):
     A simple PID controller
     """
     def __init__(self,):
-        self.p = 0.4  # Increased proportional gain
-        self.i = 0.1  # Increased integral gain
-        self.d = -0.05  # Reduced derivative gain
+        self.p = 0.18  # Slightly increased proportional gain
+        self.i = 0.08  # Increased integral gain to correct accumulated errors
+        self.d = -0.05  # Reduced derivative gain to smooth out control
         self.error_integral = 0
         self.prev_error = 0
 
