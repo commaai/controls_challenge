@@ -1,6 +1,9 @@
 <div align="center">
 <h1>comma Controls Challenge v2</h1>
 
+<h3> Prize money: best score between August 5th and September 1st 2024 wins $500!</h3>
+
+
 <h3>
   <a href="https://comma.ai/leaderboard">Leaderboard</a>
   <span> · </span>
