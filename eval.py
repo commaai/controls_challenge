@@ -93,7 +93,7 @@ def create_report(test, baseline, sample_rollouts, costs, num_segs):
   res.append(f'<img style="max-width:100%" src="data:image/png;base64,{img2base64(fig)}" alt="Plot">')
   res.append("</body></html>")
 
-  with open("report.html", "w") as fob:
+  with open("report.html", "w", encoding='utf-8') as fob:
     fob.write("\n".join(res))
     print("Report saved to: './report.html'")
 
