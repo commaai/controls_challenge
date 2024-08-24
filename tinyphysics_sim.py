@@ -131,7 +131,7 @@ class TinyPhysicsSimulator:
       batch_sim_states=self.state_histories[-CONTEXT_LENGTH:],
       batch_actions=self.action_histories[-CONTEXT_LENGTH:],
       batch_past_preds=self.current_lataccel_histories[-CONTEXT_LENGTH:],
-      random_generators=self.random_generators
+      rng=self.rng
     )
     preds = np.clip(preds, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
     if step_idx >= CONTROL_START_IDX:
