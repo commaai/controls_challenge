@@ -64,17 +64,17 @@ class TinyPhysicsModel:
     e_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
     return e_x / np.sum(e_x, axis=axis, keepdims=True)
 
-  def predict(self, input_data: dict, random_generators: List[np.random.RandomState], temperature=1.) -> np.ndarray:
+  def predict(self, input_data: dict, rng: np.random.Generator, temperature=1.) -> np.ndarray:
     res = self.ort_session.run(None, input_data)[0]
 
     # we only care about the last timestep
     probs = self.softmax(res[:, -1] / temperature, axis=-1)
     assert probs.shape[0] <= MAX_BATCH_SIZE
     assert probs.shape[1] == VOCAB_SIZE
-    samples = np.array([rand.choice(VOCAB_SIZE, p=prob) for prob, rand in zip(probs, random_generators)])
+    samples = (probs.cumsum(axis=1) > rng.random(probs.shape[0])[:, np.newaxis]).argmax(axis=1) # Inverse transform sampling
     return samples
 
-  def get_current_lataccel(self, batch_sim_states: List[List[State]], batch_actions: List[List[float]], batch_past_preds: List[np.ndarray], random_generators: List[np.random.RandomState]) -> np.ndarray:
+  def get_current_lataccel(self, batch_sim_states: List[List[State]], batch_actions: List[List[float]], batch_past_preds: List[np.ndarray], rng: np.random.Generator) -> np.ndarray:
     batch_tokenized_actions = self.tokenizer.encode(np.array(batch_past_preds)).T  # (CONTEXT_LENGTH, BATCH_SIZE)
     batch_raw_states = [[list(x) for x in sim_states] for sim_states in batch_sim_states] # (CONTEXT_LENGTH, BATCH_SIZE, 3)
 
@@ -88,7 +88,7 @@ class TinyPhysicsModel:
       'states': np.array(batch_states).astype(np.float32),
       'tokens': batch_tokenized_actions.astype(np.int64)
     }
-    return self.tokenizer.decode(self.predict(input_data, random_generators, temperature=0.8))
+    return self.tokenizer.decode(self.predict(input_data, rng, temperature=0.8))
 
 
 class TinyPhysicsSimulator:
@@ -113,8 +113,7 @@ class TinyPhysicsSimulator:
     self.target_lataccel_histories = [np.array([x[1] for x in e]) for e in batch_state_target_futureplans]
     self.target_future = None
     self.current_lataccel = self.current_lataccel_histories[-1]
-    seeds = [int(md5(data_path.encode()).hexdigest(), 16) % 10**4 for data_path in self.data_paths]
-    self.random_generators = [np.random.RandomState(seed) for seed in seeds]
+    self.rng = np.random.default_rng()
 
   def get_data(self, data_path: str) -> Dict[str, np.ndarray]:
     df = pd.read_csv(data_path)
