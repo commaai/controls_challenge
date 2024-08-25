@@ -25,6 +25,7 @@ MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
 LAT_ACCEL_COST_MULTIPLIER = 50.0
 MAX_BATCH_SIZE=256
+MAX_EPISODE_SIZE=550  # Force fixed length episodes
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
 
@@ -74,81 +75,73 @@ class TinyPhysicsModel:
     samples = (probs.cumsum(axis=1) > rng.random(probs.shape[0])[:, np.newaxis]).argmax(axis=1) # Inverse transform sampling
     return samples
 
-  def get_current_lataccel(self, batch_sim_states: List[List[State]], batch_actions: List[List[float]], batch_past_preds: List[np.ndarray], rng: np.random.Generator) -> np.ndarray:
-    batch_tokenized_actions = self.tokenizer.encode(np.array(batch_past_preds)).T  # (CONTEXT_LENGTH, BATCH_SIZE)
-    batch_raw_states = [[list(x) for x in sim_states] for sim_states in batch_sim_states] # (CONTEXT_LENGTH, BATCH_SIZE, 3)
-
-    batch_actions = np.transpose(batch_actions)
-    batch_raw_states = np.transpose(batch_raw_states, (1, 0, 2))
-
-    batch_states = np.concatenate((batch_actions[:, :, np.newaxis], batch_raw_states), axis=2)
-    # batch_states = [np.column_stack([actions, raw_states]) for actions, raw_states in zip(batch_actions, batch_raw_states)]
+  def get_current_lataccel(self, sim_states: np.ndarray, actions: np.ndarray, past_preds: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    tokenized_actions = self.tokenizer.encode(past_preds)
+    batch_states = np.concatenate((actions[:, :, np.newaxis], sim_states), axis=2)
 
     input_data = {
-      'states': np.array(batch_states).astype(np.float32),
-      'tokens': batch_tokenized_actions.astype(np.int64)
+      'states': batch_states.astype(np.float32),
+      'tokens': tokenized_actions.astype(np.int64)
     }
     return self.tokenizer.decode(self.predict(input_data, rng, temperature=0.8))
 
 
 class TinyPhysicsSimulator:
-  def __init__(self, model: TinyPhysicsModel, data_paths: Union[str, List[str]], controllers: List[BaseController]) -> None:
+  def __init__(self, model: TinyPhysicsModel, data_paths: Union[str, List[str]], controller: BaseController) -> None:
     if isinstance(data_paths, str):
       data_paths = [data_paths]
     if len(data_paths) > MAX_BATCH_SIZE:
         raise ValueError(f"batch size must be smaller than {MAX_BATCH_SIZE}")
     self.data_paths = data_paths
+    self.batch_size = len(data_paths)
     self.sim_model = model
-    self.data = list(map(self.get_data, data_paths))
-    self.controllers = controllers
-    self.is_batch_control = isinstance(controllers, BaseController) and len(data_paths) > 1
+    self.get_data(data_paths)
+    self.controller = controller
     self.reset()
 
   def reset(self) -> None:
     self.step_idx = CONTEXT_LENGTH
-    batch_state_target_futureplans = [self.get_state_target_futureplan(i) for i in range(self.step_idx)]
-    self.state_histories = [[x[0] for x in e] for e in batch_state_target_futureplans]
-    self.action_histories = np.transpose([d['steer_command'][:self.step_idx] for d in self.data]).tolist()
-    self.current_lataccel_histories = [np.array([x[1] for x in e]) for e in batch_state_target_futureplans]
-    self.target_lataccel_histories = [np.array([x[1] for x in e]) for e in batch_state_target_futureplans]
-    self.target_future = None
-    self.current_lataccel = self.current_lataccel_histories[-1]
+    self.current_lataccel_histories = self.target_lataccel_histories.copy()
+    self.current_lataccel = self.current_lataccel_histories[:, self.step_idx - 1]
+    self.futureplan = None
     self.rng = np.random.default_rng()
 
-  def get_data(self, data_path: str) -> Dict[str, np.ndarray]:
-    df = pd.read_csv(data_path)
-    data = {
-      'roll_lataccel': np.sin(df['roll'].to_numpy()) * ACC_G,
-      'v_ego': df['vEgo'].to_numpy(),
-      'a_ego': df['aEgo'].to_numpy(),
-      'target_lataccel': df['targetLateralAcceleration'].to_numpy(),
-      'steer_command': -df['steerCommand'].to_numpy()  # steer commands are logged with left-positive convention but this simulator uses right-positive
-    }
-    return data
+  def get_data(self, data_paths: str) -> Dict[str, np.ndarray]:
+    df = [pd.read_csv(p) for p in data_paths]
+    self.state_histories = np.array([np.column_stack([np.sin(d['roll'].to_numpy())[:MAX_EPISODE_SIZE] * ACC_G,
+                                    d['vEgo'].to_numpy()[:MAX_EPISODE_SIZE],
+                                    d['aEgo'].to_numpy()[:MAX_EPISODE_SIZE]]) for d in df])
+    self.target_lataccel_histories = np.array([d['targetLateralAcceleration'].to_numpy()[:MAX_EPISODE_SIZE] for d in df])
+    self.action_histories = np.array([-d['steerCommand'].to_numpy()[:MAX_EPISODE_SIZE] for d in df]) # steer commands are logged with left-positive convention but this simulator uses right-positive
 
   def sim_step(self, step_idx: int) -> None:
     preds = self.sim_model.get_current_lataccel(
-      batch_sim_states=self.state_histories[-CONTEXT_LENGTH:],
-      batch_actions=self.action_histories[-CONTEXT_LENGTH:],
-      batch_past_preds=self.current_lataccel_histories[-CONTEXT_LENGTH:],
+      sim_states=self.state_histories[:, step_idx - CONTEXT_LENGTH + 1: step_idx + 1],
+      actions=self.action_histories[:, step_idx - CONTEXT_LENGTH + 1: step_idx + 1],
+      past_preds=self.current_lataccel_histories[:, step_idx - CONTEXT_LENGTH: step_idx],
       rng=self.rng
     )
     preds = np.clip(preds, self.current_lataccel - MAX_ACC_DELTA, self.current_lataccel + MAX_ACC_DELTA)
     if step_idx >= CONTROL_START_IDX:
       self.current_lataccel = preds
     else:
-      self.current_lataccel = self.target_lataccel_histories[-1]
+      self.current_lataccel = self.target_lataccel_histories[:, step_idx]
 
-    self.current_lataccel_histories.append(self.current_lataccel)
+    self.current_lataccel_histories[:, step_idx] = self.current_lataccel
 
   def control_step(self, step_idx: int) -> None:
-    actions = [controller.update(self.target_lataccel_histories[step_idx][i], self.current_lataccel[i], self.state_histories[step_idx][i], future_plan=self.futureplan[i]) for i, controller in enumerate(self.controllers)]
+    actions = self.controller.update(self.target_lataccel_histories[:, step_idx], self.current_lataccel, self.state_histories[:, step_idx], future_plan=self.futureplan)
     if step_idx < CONTROL_START_IDX:
-      actions = [d['steer_command'][step_idx] for d in self.data]
-    actions = np.clip(actions, STEER_RANGE[0], STEER_RANGE[1]).tolist()
-    self.action_histories.append(actions)
+      actions = self.action_histories[:, step_idx]
+    actions = np.clip(actions, STEER_RANGE[0], STEER_RANGE[1])
+    self.action_histories[:, step_idx] = actions
 
-  def get_state_target_futureplan(self, step_idx: int) -> List[Tuple[State, float, FuturePlan]]:
+  def get_future_plan(self, step_idx: int) -> List[Tuple[State, float, FuturePlan]]:
+    self.futureplan[:, :, 0] = self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS + 1]
+
+    return np.concatenate([self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS, np.newaxis],
+                           self.state_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS]], axis=2)
+    # Off by one error
     return [(
       State(roll_lataccel=d['roll_lataccel'][step_idx], v_ego=d['v_ego'][step_idx], a_ego=d['a_ego'][step_idx]),
       d['target_lataccel'][step_idx],
@@ -161,10 +154,7 @@ class TinyPhysicsSimulator:
     ) for d in self.data]
 
   def step(self) -> None:
-    batch_state_target_futureplan = self.get_state_target_futureplan(self.step_idx)
-    self.state_histories.append([x[0] for x in batch_state_target_futureplan])
-    self.target_lataccel_histories.append(np.array([x[1] for x in batch_state_target_futureplan]))
-    self.futureplan = [x[2] for x in batch_state_target_futureplan]
+    self.futureplan = self.get_future_plan(self.step_idx)
     self.control_step(self.step_idx)
     self.sim_step(self.step_idx)
     self.step_idx += 1
@@ -180,16 +170,16 @@ class TinyPhysicsSimulator:
     ax.set_ylabel(axis_labels[1])
 
   def compute_cost(self) -> List[Dict[str, float]]:
-    target = np.array(self.target_lataccel_histories)[CONTROL_START_IDX:COST_END_IDX]
-    pred = np.array(self.current_lataccel_histories)[CONTROL_START_IDX:COST_END_IDX]
+    target = np.array(self.target_lataccel_histories)[:, CONTROL_START_IDX:COST_END_IDX]
+    pred = np.array(self.current_lataccel_histories)[:, CONTROL_START_IDX:COST_END_IDX]
 
-    lat_accel_costs = np.mean((target - pred)**2, axis=0) * 100
-    jerk_costs = np.mean((np.diff(pred, axis=0) / DEL_T)**2, axis=0) * 100
+    lat_accel_costs = np.mean((target - pred)**2, axis=1) * 100
+    jerk_costs = np.mean((np.diff(pred, axis=1) / DEL_T)**2, axis=1) * 100
     total_costs = (lat_accel_costs * LAT_ACCEL_COST_MULTIPLIER) + jerk_costs
     return [{'lataccel_cost': lat_accel_cost, 'jerk_cost': jerk_cost, 'total_cost': total_cost} for lat_accel_cost, jerk_cost, total_cost in zip(lat_accel_costs, jerk_costs, total_costs)]
 
   def rollout(self) -> List[Dict[str, float]]:
-    for _ in range(CONTEXT_LENGTH, 550):
+    for _ in range(CONTEXT_LENGTH, MAX_EPISODE_SIZE):
       self.step()
 
     return self.compute_cost()
@@ -203,8 +193,8 @@ def run_rollout(data_paths, controller_type, model_path, debug=False):
   if not isinstance(data_paths, list):
     data_paths = [data_paths]
   tinyphysicsmodel = TinyPhysicsModel(model_path, debug=debug)
-  controllers = [importlib.import_module(f'controllers.{controller_type}').Controller() for _ in range(len(data_paths))]
-  sim = TinyPhysicsSimulator(tinyphysicsmodel, [str(x) for x in data_paths], controllers=controllers)
+  controller = importlib.import_module(f'controllers.{controller_type}').Controller()
+  sim = TinyPhysicsSimulator(tinyphysicsmodel, [str(x) for x in data_paths], controller=controller)
   return sim.rollout(), sim.target_lataccel_histories, sim.current_lataccel_histories
 
 
