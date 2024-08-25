@@ -214,6 +214,6 @@ if __name__ == "__main__":
     print(f"\nAverage lataccel_cost: {cost[0]['lataccel_cost']:>6.4}, average jerk_cost: {cost[0]['jerk_cost']:>6.4}, average total_cost: {cost[0]['total_cost']:>6.4}")
   elif data_path.is_dir():
     files = sorted(data_path.iterdir())[:args.num_segs]
-    costs = run_rollout([str(f) for f in files], args.controller, args.model_path)[0]
+    costs = run_rollout([str(f) for f in files], args.controller, args.model_path)
     costs_df = pd.DataFrame(costs)
     print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")
