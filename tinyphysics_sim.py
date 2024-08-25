@@ -191,9 +191,12 @@ def run_rollout(data_paths, controller_type, model_path, debug=False):
   if not isinstance(data_paths, list):
     data_paths = [data_paths]
   tinyphysicsmodel = TinyPhysicsModel(model_path, debug=debug)
-  controller = importlib.import_module(f'controllers.{controller_type}').Controller()
-  sim = TinyPhysicsSimulator(tinyphysicsmodel, [str(x) for x in data_paths], controller=controller)
-  return sim.rollout(), sim.target_lataccel_histories, sim.current_lataccel_histories
+  costs = []
+  for i in tqdm(range(0, len(data_paths), MAX_BATCH_SIZE)):
+    controller = importlib.import_module(f'controllers.{controller_type}').Controller()
+    sim = TinyPhysicsSimulator(tinyphysicsmodel, data_paths[i: min(i + MAX_BATCH_SIZE, len(data_paths))], controller=controller)
+    costs += sim.rollout()
+  return costs
 
 
 if __name__ == "__main__":
@@ -211,8 +214,6 @@ if __name__ == "__main__":
     print(f"\nAverage lataccel_cost: {cost[0]['lataccel_cost']:>6.4}, average jerk_cost: {cost[0]['jerk_cost']:>6.4}, average total_cost: {cost[0]['total_cost']:>6.4}")
   elif data_path.is_dir():
     files = sorted(data_path.iterdir())[:args.num_segs]
-    costs = []
-    for i in tqdm(range(0, args.num_segs, MAX_BATCH_SIZE)):
-      costs += run_rollout(files[i: min(i + MAX_BATCH_SIZE, args.num_segs)], args.controller, args.model_path)[0]
+    costs = run_rollout([str(f) for f in files], args.controller, args.model_path)[0]
     costs_df = pd.DataFrame(costs)
     print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")
