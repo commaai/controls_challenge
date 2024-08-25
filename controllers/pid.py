@@ -13,7 +13,7 @@ class Controller(BaseController):
     self.prev_error = None
 
   def update(self, target_lataccel, current_lataccel, state, future_plan):
-      if not self.error_integral:
+      if self.error_integral is None:
          self.error_integral = np.zeros_like(target_lataccel)
          self.prev_error = np.zeros_like(target_lataccel)
          

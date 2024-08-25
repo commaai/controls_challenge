@@ -136,9 +136,7 @@ class TinyPhysicsSimulator:
     actions = np.clip(actions, STEER_RANGE[0], STEER_RANGE[1])
     self.action_histories[:, step_idx] = actions
 
-  def get_future_plan(self, step_idx: int) -> List[Tuple[State, float, FuturePlan]]:
-    self.futureplan[:, :, 0] = self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS + 1]
-
+  def get_future_plan(self, step_idx: int) -> np.ndarray:
     return np.concatenate([self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS, np.newaxis],
                            self.state_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS]], axis=2)
     # Off by one error
