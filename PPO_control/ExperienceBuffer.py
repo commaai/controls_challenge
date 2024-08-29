@@ -25,57 +25,17 @@ class PPOExperienceBuffer(Dataset):
     def __getitem__(self, idx) -> Tuple[Union[int, float], torch.Tensor, torch.Tensor, torch.Tensor]:
         return self.actions[idx], self.observations[idx], self.targets[idx], self.samples[idx]
 
-
-    def add_trajectory(self, observation: List[torch.Tensor], action: List[Union[int, float]], action_p: List[float], reward: List[Union[int, float]], value_estimate: List[float]) -> None:
-        """
-        Add a trajectory to the buffer.
-
-        Args:
-            action (episode_len): List of actions taken during the episode.
-            action_p (episode_len): List of action probabilities corresponding to each action.
-            reward (episode_len): List of rewards received for each step.
-            value_estimate (episode_len+1): List of value estimates, including the estimate for the final state.
-
-        Raises:
-            ValueError: If input lengths are inconsistent with the episode length.
-
-        Note:
-            The length of value_estimate should be one more than the other inputs to include the final state estimate.
-        """
-
-        episode_len = len(action)
-
-        if len(action_p) != episode_len:
-            raise ValueError(f'action_p length mismatch. episode length: {episode_len}, action_p length: {len(action_p) }')
-        if len(reward) != episode_len:
-            raise ValueError(f'reward length mismatch. episode length: {episode_len}, reward length: {len(reward)}')
-        if len(value_estimate) != episode_len + 1:
-            raise ValueError(f'value_estimate length mismatch. expected length: {episode_len + 1}, actual length: {len(value_estimate)}')
-        
-        self.actions += action
-        self.observations += observation
-        action_p = torch.tensor(action_p)
-        reward = torch.tensor(reward)
-        value_estimate = torch.tensor(value_estimate)
-
-        value_target = calculate_value_target_vec(reward.unsqueeze(0), value_estimate.unsqueeze(0), self.discount_factor).squeeze()
-        gae = generalized_advantage_estimation_vec(reward.unsqueeze(0), value_estimate.unsqueeze(0), self.discount_factor, self.td_decay).squeeze()
-        
-        trajectory = torch.column_stack([action_p, value_estimate[:-1], value_target, gae])
-        self.samples = torch.vstack([self.samples, trajectory])
-
-
-    def batch_add_trajectory(self, observation: List[torch.Tensor], target: List[torch.Tensor], action: List[torch.Tensor], action_p: List[torch.Tensor], reward: List[torch.Tensor], value_estimate: List[torch.Tensor]) -> None:
+    def batch_add_trajectory(self, observation: torch.Tensor, target: torch.Tensor, action: torch.Tensor, action_p: torch.Tensor, reward: torch.Tensor, value_estimate: torch.Tensor) -> None:
         """
         Add a batch of trajectories to the buffer.
 
         Args:
-            observation (episode_len, batch_size): List of batch observation at each time step
-            target (episode_len, batch_size): List of batch target at each time step
-            action (episode_len, batch_size): List of batch actions taken during the episode.
-            action_p (episode_len, batch_size): List of batch action probabilities corresponding to each action.
-            reward (episode_len, batch_size): List of batch rewards received for each step.
-            value_estimate (episode_len+1, batch_size): List of batch value estimates, including the estimate for the final state.
+            observation (batch_size, episode_len): Batch observation at each time step
+            target (batch_size, episode_len): Batch target at each time step
+            action (batch_size, episode_len): Batch actions taken during the episode.
+            action_p (batch_size, episode_len): Batch action probabilities corresponding to each action.
+            reward (batch_size, episode_len): Batch rewards received for each step.
+            value_estimate (batch_size, episode_len+1): Batch value estimates, including the estimate for the final state.
 
         Raises:
             ValueError: If input lengths are inconsistent with the episode length.
@@ -84,21 +44,18 @@ class PPOExperienceBuffer(Dataset):
             The length of value_estimate should be one more than the other inputs to include the final state estimate.
         """
         
-        episode_len = len(action)
+        episode_len = action.shape[1]
 
-        if len(action_p) != episode_len:
-            raise ValueError(f'action_p length mismatch. episode length: {episode_len}, action_p length: {len(action_p) }')
-        if len(reward) != episode_len:
-            raise ValueError(f'reward length mismatch. episode length: {episode_len}, reward length: {len(reward)}')
-        if len(value_estimate) != episode_len + 1:
+        if action_p.shape[1] != episode_len:
+            raise ValueError(f'action_p length mismatch. episode length: {episode_len}, action_p length: {action_p.shape[1]}')
+        if reward.shape[1] != episode_len:
+            raise ValueError(f'reward length mismatch. episode length: {episode_len}, reward length: {reward.shape[1]}')
+        if value_estimate.shape[1] != episode_len + 1:
             raise ValueError(f'value_estimate length mismatch. expected length: {episode_len + 1}, actual length: {len(value_estimate)}')
         
-        self.actions += [action[t][i] for i in range(len(action[0])) for t in range(len(action))]
-        self.observations += [observation[t][i] for i in range(len(observation[0])) for t in range(len(observation))]
-        self.targets += []  #TODO
-        action_p = torch.tensor(action_p).T
-        reward = torch.tensor(reward).T
-        value_estimate = torch.tensor(value_estimate).T
+        self.actions += action.flatten().tolist()
+        self.observations += [x for x in observation.flatten(0, 1)]
+        self.targets += [x for x in target.flatten(0, 1)]
 
         value_target = calculate_value_target_vec(reward, value_estimate, self.discount_factor)
         gae = generalized_advantage_estimation_vec(reward, value_estimate, self.discount_factor, self.td_decay)
@@ -108,4 +65,6 @@ class PPOExperienceBuffer(Dataset):
 
     def reset(self):
         self.actions = []
-        self.samples = torch.tensor([[]])
+        self.observations = []
+        self.targets = []
+        self.samples = torch.zeros((0, 4))

@@ -23,7 +23,7 @@ STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
 LAT_ACCEL_COST_MULTIPLIER = 50.0
-MAX_BATCH_SIZE=256
+MAX_BATCH_SIZE=512
 MAX_EPISODE_SIZE=450  # Force fixed length episodes
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
@@ -84,16 +84,11 @@ class TinyPhysicsModel:
 
 
 class TinyPhysicsSimulator:
-  def __init__(self, model: TinyPhysicsModel, data_paths: Union[str, List[str]], controller: BaseController, episode_len: int=MAX_EPISODE_SIZE) -> None:
-    if isinstance(data_paths, str):
-      data_paths = [data_paths]
-    if len(data_paths) > MAX_BATCH_SIZE:
-        raise ValueError(f"batch size must be smaller than {MAX_BATCH_SIZE}")
-    self.data_paths = data_paths
-    self.batch_size = len(data_paths)
+  def __init__(self, model: TinyPhysicsModel, dfs: List[pd.DataFrame], controller: BaseController, episode_len: int=MAX_EPISODE_SIZE) -> None:
+    self.batch_size = len(dfs)
     self.terminate_step = CONTROL_START_IDX + episode_len
     self.sim_model = model
-    self.get_data(data_paths)
+    self.get_data(dfs)
     self.controller = controller
     self.reset()
 
@@ -104,13 +99,12 @@ class TinyPhysicsSimulator:
     self.futureplan = None
     self.rng = np.random.default_rng()
 
-  def get_data(self, data_paths: str) -> None:
-    df = [pd.read_csv(p) for p in data_paths]
+  def get_data(self, dfs: List[pd.DataFrame]) -> None:
     self.state_histories = np.array([np.column_stack([np.sin(d['roll'].to_numpy())[:self.terminate_step] * ACC_G,
                                     d['vEgo'].to_numpy()[:self.terminate_step],
-                                    d['aEgo'].to_numpy()[:self.terminate_step]]) for d in df])
-    self.target_lataccel_histories = np.array([d['targetLateralAcceleration'].to_numpy()[:self.terminate_step] for d in df])
-    self.action_histories = np.array([-d['steerCommand'].to_numpy()[:self.terminate_step] for d in df]) # steer commands are logged with left-positive convention but this simulator uses right-positive
+                                    d['aEgo'].to_numpy()[:self.terminate_step]]) for d in dfs])
+    self.target_lataccel_histories = np.array([d['targetLateralAcceleration'].to_numpy()[:self.terminate_step] for d in dfs])
+    self.action_histories = np.array([-d['steerCommand'].to_numpy()[:self.terminate_step] for d in dfs]) # steer commands are logged with left-positive convention but this simulator uses right-positive
 
   def sim_step(self, step_idx: int) -> None:
     preds = self.sim_model.get_current_lataccel(
@@ -135,8 +129,8 @@ class TinyPhysicsSimulator:
     self.action_histories[:, step_idx] = actions
 
   def get_future_plan(self, step_idx: int) -> np.ndarray:
-    return np.concatenate([self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS, np.newaxis],
-                           self.state_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS]], axis=2)
+    return np.concatenate([self.state_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS],
+                           self.target_lataccel_histories[:, step_idx + 1: step_idx + FUTURE_PLAN_STEPS, np.newaxis]], axis=2)
 
   def step(self) -> None:
     self.futureplan = self.get_future_plan(self.step_idx)
@@ -144,7 +138,7 @@ class TinyPhysicsSimulator:
     self.sim_step(self.step_idx)
     self.step_idx += 1
 
-  def compute_cost(self) -> List[Dict[str, float]]:
+  def compute_cost(self) -> Tuple[float, float, float]:
     target = self.target_lataccel_histories[:, CONTROL_START_IDX:]
     pred = self.current_lataccel_histories[:, CONTROL_START_IDX:]
 
@@ -154,7 +148,7 @@ class TinyPhysicsSimulator:
 
     return lat_accel_costs.mean(), jerk_costs.mean(), total_costs.mean()
 
-  def rollout(self) -> List[Dict[str, float]]:
+  def rollout(self) -> Tuple[float, float, float]:
     for _ in range(CONTEXT_LENGTH, self.terminate_step):
       self.step()
 
@@ -173,21 +167,6 @@ def run_rollout(data_paths, controller_type, model_path, debug=False):
     sim = TinyPhysicsSimulator(tinyphysicsmodel, data_paths[i: min(i + MAX_BATCH_SIZE, len(data_paths))], controller=controller)
     costs += sim.rollout()
   return costs
-
-def episode_rollout(model: TinyPhysicsModel, data_path: str, n_episode: int, episode_len: int, controller: BaseController, path_boundary: float, skip_first: int=5000):
-  data_path = Path(data_path)
-  if not data_path.is_dir():
-    raise ValueError('data_path is not a directory')
-  files = sorted(data_path.iterdir())[skip_first:]
-  files = random.sample(files, n_episode)
-  sim = TinyPhysicsSimulator(model, [str(f) for f in files], controller=controller, episode_len=episode_len)
-  lat_cost, jerk_cost, total_cost = sim.rollout()
-
-  # Calculate rewards
-  deviation = np.abs(sim.target_lataccel_histories[:, CONTROL_START_IDX:] - sim.current_lataccel_histories[:, CONTROL_START_IDX:])
-  rewards = 1 - deviation / path_boundary
-  rewards[rewards < 0] = -1
-
 
 # if __name__ == "__main__":
 #   available_controllers = get_available_controllers()

@@ -4,3 +4,6 @@ report.html
 models/tinyphysics_*.onnx
 venv/
 comma_steer_command/
+PPO_control/checkpoints
+PPO_control/results
+PPO_control/training_logs

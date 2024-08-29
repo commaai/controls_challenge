@@ -1,0 +1,15 @@
+{
+    "model_id": "0827-2",
+    "n_episode": 512,
+    "episode_len": 60,
+    "path_boundary": 0.1,
+    "lr": 2.5E-4,
+    "batch_size": 384,
+    "n_epoch": 4,
+    "n_step": 50000,
+    "c1": 0.5,
+    "c2": 0.001,
+    "clip_eps": 0.2,
+    "discount_factor": 0.91,
+    "td_decay": 0.85
+}
