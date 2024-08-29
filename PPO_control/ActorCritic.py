@@ -3,18 +3,20 @@ from typing import Tuple, List, Union
 
 import torch
 import torch.nn as nn
+from torch.distributions import Normal
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_dim: int, obs_seq_len: int, target_dim: int, action_dim: int, has_continuous_action: bool):
+    def __init__(self, obs_dim: int, obs_seq_len: int, target_dim: int, action_dim: int, has_continuous_action: bool, action_scale: float=1):
         super().__init__()
         self.obs_dim = obs_dim
         self.obs_seq_len = obs_seq_len
         self.target_dim = target_dim
         self.action_dim = action_dim
         self.has_continuous_action = has_continuous_action
+        self.action_scale = action_scale
         self.rng = np.random.default_rng()
 
         self.feature_lstm = nn.LSTM(input_size=self.obs_dim, hidden_size=16, num_layers=2, batch_first=True)
@@ -73,30 +75,32 @@ class ActorCritic(nn.Module):
         action_logit = self.actor(x)
         value = self.critic(x)
 
-        return action_logit, value
-
-    def std(self, std: float):
-        if not self.has_continuous_action:
-            print("Trying to set std for discrete action space model.")
+        if self.has_continuous_action:
+            return Normal(action_logit.flatten(), torch.exp(self.log_std)), value
         else:
-            self.std = std
+            return action_logit, value
 
     def act(self, past_obs: torch.Tensor, target: torch.Tensor, eval: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         with torch.no_grad():
             self.eval()
             action_logit, value = self.forward(past_obs, target)
-            action_logit = action_logit.cpu().numpy()
         
-        # Continuous case
-        if self.has_continuous_action:
+            if self.has_continuous_action:
+                # Continuous case
+                action = action_logit.sample()
+                action_prob = torch.exp(action_logit.log_prob(action))
+                action = action.numpy() * self.action_scale
+                action_prob = action_prob.numpy()
+            else:
+                # Discrete case
+                action_logit = action_logit.numpy()
+                if eval:
+                    
+                    action = action_logit.argmax(axis=1)
+                    action_prob = action_logit[np.arange(len(action)), action]
+                else:
+                    action = (action_logit.cumsum(axis=1) > self.rng.random(action_logit.shape[0])[:, np.newaxis]).argmax(axis=1) # Inverse transform sampling
+                    action_prob = action_logit[np.arange(len(action)), action]
             
-        # Discrete case
-        if eval:
-            action = action_logit.argmax(axis=1)
-            action_prob = action_logit[np.arange(len(action)), action]
-        else:
-            action = (action_logit.cumsum(axis=1) > self.rng.random(action_logit.shape[0])[:, np.newaxis]).argmax(axis=1) # Inverse transform sampling
-            action_prob = action_logit[np.arange(len(action)), action]
-        
-        return action, action_prob, value.cpu().flatten().numpy()
+        return action, action_prob, value.flatten().numpy()
 

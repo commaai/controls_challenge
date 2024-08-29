@@ -73,7 +73,7 @@ def episode_rollout(model: TinyPhysicsModel, dfs: List[pd.DataFrame], buffer: PP
 
     return buffer, rewards, lat_cost, jerk_cost, total_cost
 
-def train(policy_model: ActorCritic, optimizer: optim.Optimizer, run_rollout: Callable, episode_len: int, path_boundary: float, n_steps: int, n_episode: int, n_epoch: int, batch_size: int, clip_eps: float, c1: float, c2: float, device: torch.device, checkpoint=None):
+def train(policy_model: ActorCritic, actor_optimizer: optim.Optimizer, critic_optimizer: optim.Optimizer, run_rollout: Callable, episode_len: int, path_boundary: float, n_steps: int, n_episode: int, n_epoch: int, batch_size: int, clip_eps: float, device: torch.device, checkpoint=None):
     reward_history = []
     lat_cost_history = []
     jerk_cost_history = []
@@ -81,87 +81,89 @@ def train(policy_model: ActorCritic, optimizer: optim.Optimizer, run_rollout: Ca
     total_loss_history = []
     actor_obj_history = []
     critic_loss_history = []
-    entropy_obj_history = []
+    logstd_history = []
 
     start_step = 0
     
     if checkpoint:
         start_step = checkpoint['step']
         policy_model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
+        critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         
         reward_history = checkpoint['reward_history']
         lat_cost_history = checkpoint['lat_cost_history']
         jerk_cost_history = checkpoint['jerk_cost_history']
-        total_loss_history = checkpoint['total_loss_history']
         actor_obj_history = checkpoint['actor_obj_history']
         critic_loss_history = checkpoint['critic_loss_history']
-        entropy_obj_history = checkpoint['entropy_obj_history']
+        logstd_history = checkpoint['logstd_history']
 
     for i_step in range(start_step, n_steps):
         # Run simulation
         buffer, rewards, lat_cost, jerk_cost, total_cost = run_rollout(policy_model, n_episode, episode_len, path_boundary, device)
-        print(f'Training step {i_step:>7}: average_reward: {rewards.mean(): .4f}, lat_cost: {lat_cost: .2f}, jerk_cost: {jerk_cost: .2f}')
+        print(f'Training step {i_step:>7}: average_reward: {rewards.mean(): .4f}, lat_cost: {lat_cost: .2f}, jerk_cost: {jerk_cost: .2f}, total_cost: {total_cost: .2f}')
         # Record policy's performance at each step
         reward_history.append(rewards.mean().item())
         lat_cost_history.append(lat_cost)
         jerk_cost_history.append(jerk_cost)
-
+        
         # Start training loops
         data_loader = DataLoader(buffer, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
         policy_model.train()
         for i_epoch in range(n_epoch):
             print(f'Training step {i_step:>7}, epoch {i_epoch:>3}:', end='')
 
-            epoch_total_loss_history = []
             epoch_actor_obj_history = []
             epoch_critic_loss_history = []
-            epoch_entropy_obj_history = []
+            epoch_logstd_history = []
 
             for data in data_loader:
                 actions, observations, targets, transitions = data
-                actions = actions.type(torch.int)
+                actions = actions.type(torch.float32)
                 observations = observations.to(device)
                 targets = targets.to(device)
                 transitions = transitions.to(device)
 
-                optimizer.zero_grad()
+                actor_optimizer.zero_grad()
+                critic_optimizer.zero_grad()
 
-                action_prob_new, value_estimates = policy_model(observations, targets)
-                action_prob_new = action_prob_new[torch.arange(actions.shape[0]), actions]
+                action_dist, value_estimates = policy_model(observations, targets)
+                action_prob_new = action_dist.log_prob(actions)
                 value_estimates = value_estimates.flatten()
 
-                loss, actor_obj, critic_loss, entropy_obj = ppo_loss(action_prob_new, transitions[:, 0], transitions[:, 3], value_estimates, transitions[:, 2], clip_eps, c1, c2)
-                loss.backward()
-                optimizer.step()
+                a_l = actor_loss(action_prob_new, transitions[:, 0], transitions[:, 3], clip_eps)
+                c_l = value_loss(value_estimates, transitions[:, 2])
 
-                epoch_total_loss_history.append(loss.item())
-                epoch_actor_obj_history.append(actor_obj)
-                epoch_critic_loss_history.append(critic_loss)
-                epoch_entropy_obj_history.append(entropy_obj)
+                a_l.backward()
+                actor_optimizer.step()
+                c_l.backward()
+                critic_optimizer.step()
 
-            total_loss_history.append(np.mean(epoch_total_loss_history))
+                epoch_actor_obj_history.append(a_l.item())
+                epoch_critic_loss_history.append(c_l.item())
+                epoch_logstd_history.append(policy_model.log_std.item())
+
             actor_obj_history.append(np.mean(epoch_actor_obj_history))
             critic_loss_history.append(np.mean(epoch_critic_loss_history))
-            entropy_obj_history.append(np.mean(epoch_entropy_obj_history))
+            logstd_history.append(np.mean(epoch_logstd_history))
 
-            print(f' total_loss: {total_loss_history[-1]: 0.3f}, actor_obj: {actor_obj_history[-1]: 0.3f}, critic_loss: {critic_loss_history[-1]: 0.3f}, entropy_obj: {entropy_obj_history[-1]: 0.3f}')
+            print(f' actor_obj: {actor_obj_history[-1]: 0.3f}, critic_loss: {critic_loss_history[-1]: 0.3f}, logstd: {logstd_history[-1]: 0.3f}')
         
         if i_step % 10 == 9:
             torch.save({
                 'step': i_step,
                 'model_state_dict': policy_model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
+                'actor_optimizer_state_dict': actor_optimizer.state_dict(),
+                'critic_optimizer_state_dict': critic_optimizer.state_dict(),
                 'reward_history': reward_history,
                 'lat_cost_history': lat_cost_history,
                 'jerk_cost_history': jerk_cost_history,
-                'total_loss_history': total_loss_history,
                 'actor_obj_history': actor_obj_history,
                 'critic_loss_history': critic_loss_history,
-                'entropy_obj_history': entropy_obj_history
+                'logstd_history': logstd_history
             }, f'./checkpoints/exp{model_id}_step{i_step + 1}.pt')
 
-    return reward_history, lat_cost_history, jerk_cost_history, total_loss_history, actor_obj_history, critic_loss_history, entropy_obj_history
+    return reward_history, lat_cost_history, jerk_cost_history, total_loss_history, actor_obj_history, critic_loss_history, logstd_history
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -183,12 +185,11 @@ if __name__ == '__main__':
     n_episode = config['n_episode']
     episode_len = config['episode_len']
     path_boundary = config['path_boundary']
-    lr = config['lr']
+    a_lr = config['a_lr']
+    c_lr = config['c_lr']
     batch_size = config['batch_size']
     n_epoch = config['n_epoch']
     n_step = config['n_step']
-    c1 = config['c1']
-    c2 = config['c2']
     clip_eps = config['clip_eps']
     discount_factor = config['discount_factor']
     td_decay = config['td_decay']
@@ -202,10 +203,11 @@ if __name__ == '__main__':
     dfs = [pd.read_csv(f) for f in data_paths]
     experience_buffer = PPOExperienceBuffer(discount_factor, td_decay)
 
-    optimizer = optim.Adam(policy_model.parameters(), lr, eps=1e-5)
+    actor_optimizer = optim.Adam(list(policy_model.actor.parameters()) + list(policy_model.feature_lstm.parameters()) + [policy_model.log_std], a_lr, eps=1e-6)
+    critic_optimizer = optim.Adam(policy_model.critic.parameters(), c_lr, eps=1e-6)
 
     sim_rollout = partial(episode_rollout, tinyphysicsmodel, dfs, experience_buffer)
 
-    result = train(policy_model, optimizer, sim_rollout, episode_len, path_boundary, n_step, n_episode, n_epoch, batch_size, clip_eps, c1, c2, device, checkpoint)
+    result = train(policy_model, actor_optimizer, critic_optimizer, sim_rollout, episode_len, path_boundary, n_step, n_episode, n_epoch, batch_size, clip_eps, device, checkpoint)
     np.save(f'results/result_{model_id}.npy', np.array(result, dtype=object), allow_pickle=True)
     

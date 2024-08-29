@@ -2,38 +2,22 @@ from typing import Tuple
 
 import torch
 
-def ppo_loss(action_p: torch.Tensor, action_p_old: torch.Tensor, advantage: torch.Tensor, value: torch.Tensor, value_target: torch.Tensor, clip_eps: float, c1: float, c2: float) -> Tuple[torch.Tensor, float, float, float]:
-    eps = 1e-6
+def actor_loss(action_p: torch.Tensor, action_p_old: torch.Tensor, advantage: torch.Tensor, clip_eps: float):
+    eps = 1e-8
     r = action_p / (action_p_old + eps)
     L_clip = torch.mean(torch.min(r * advantage, torch.clip(r, 1 - clip_eps, 1 + clip_eps) * advantage))
+    return -L_clip
+
+def value_loss(value: torch.Tensor, value_target: torch.Tensor) -> Tuple[torch.Tensor, float, float, float]:
     L_value = torch.mean((value - value_target) ** 2)
-    L_entropy = torch.mean(-torch.log(action_p))
-
-    if torch.isnan(L_clip) or torch.isnan(L_value) or torch.isnan(L_entropy):
-        input_tensors = [
-            ("action_p", action_p),
-            ("action_p_old", action_p_old),
-            ("advantage", advantage),
-            ("value", value),
-            ("value_target", value_target)
-        ]
-
-        for name, tensor in input_tensors:
-            nan_mask = torch.isnan(tensor)
-            if nan_mask.any():
-                nan_indices = torch.nonzero(nan_mask, as_tuple=False)
-                print(f"NaN detected in {name} at indices: {nan_indices.tolist()}")
-        
-        raise ValueError("Nan detected in loss function.")
-
-    return -L_clip + c1 * L_value - c2 * L_entropy, L_clip.item(), L_value.item(), L_entropy.item() 
+    return L_value
 
 def generalized_advantage_estimation(reward: torch.Tensor, value: torch.Tensor, discount_factor: float, decay: float) -> torch.Tensor:
     '''
     reward: batched rewards for each time step (batch_size, T)
     value: batched value estimation for each time step plus last state (batch_size, T+1)
     '''
-    eps = 1e-6
+    eps = 1e-8
 
     advantage = torch.zeros_like(reward)
     last_adv = 0
@@ -52,7 +36,7 @@ def calculate_value_target(reward: torch.Tensor, value: torch.Tensor, discount_f
     reward: batched rewards for each time step (batch_size, T)
     value: batched value estimation for each time step plus last state (batch_size, T+1)
     '''
-    eps = 1e-6
+    eps = 1e-8
 
     v_target = torch.zeros_like(reward)
     last_reward = value[:, -1]
@@ -70,7 +54,7 @@ def calculate_value_target_vec(reward: torch.Tensor, value: torch.Tensor, discou
     value: batched value estimation for each time step plus last state (batch_size, T+1)
     '''
     T = reward.shape[1]
-    eps = 1e-6
+    eps = 1e-8
 
     # Calculate discounted sum of rewards
     discount_factors = discount_factor ** torch.arange(T, dtype=torch.float32, device=reward.device)
@@ -90,7 +74,7 @@ def generalized_advantage_estimation_vec(reward: torch.Tensor, value: torch.Tens
     value: batched value estimation for each time step plus last state (batch_size, T+1)
     '''
     T = reward.shape[1]
-    eps = 1e-6
+    eps = 1e-8
     
     # Calculate delta
     delta = reward + discount_factor * value[:, 1:] - value[:, :-1]
