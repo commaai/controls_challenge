@@ -38,7 +38,7 @@ class Controller(BaseController):
         target = torch.from_numpy(target).float().to(self.device)
 
         action, action_prob, value = self.policy_model.act(past_obs, target, self.eval)
-        steer = STEER_RANGE[0] + action * (STEER_RANGE[1] - STEER_RANGE[0]) / (ACTION_DIM - 1)
+        steer = action
 
         self.observation_history.append(past_obs.cpu())
         self.target_history.append(target.cpu())
