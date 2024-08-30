@@ -1,10 +1,10 @@
 {
     "model_id": "0828-1",
-    "n_episode": 512,
+    "n_episode": 256,
     "episode_len": 80,
     "path_boundary": 0.15,
     "a_lr": 3E-4,
-    "v_lr": 1E-3,
+    "c_lr": 1E-3,
     "batch_size": 512,
     "n_epoch": 3,
     "n_step": 10000,

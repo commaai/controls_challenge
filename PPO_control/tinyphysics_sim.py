@@ -23,7 +23,7 @@ STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
 LAT_ACCEL_COST_MULTIPLIER = 50.0
-MAX_BATCH_SIZE=512
+MAX_BATCH_SIZE=1024
 MAX_EPISODE_SIZE=450  # Force fixed length episodes
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
@@ -100,11 +100,11 @@ class TinyPhysicsSimulator:
     self.rng = np.random.default_rng()
 
   def get_data(self, dfs: List[pd.DataFrame]) -> None:
-    self.state_histories = np.array([np.column_stack([np.sin(d['roll'].to_numpy())[:self.terminate_step] * ACC_G,
-                                    d['vEgo'].to_numpy()[:self.terminate_step],
-                                    d['aEgo'].to_numpy()[:self.terminate_step]]) for d in dfs])
-    self.target_lataccel_histories = np.array([d['targetLateralAcceleration'].to_numpy()[:self.terminate_step] for d in dfs])
-    self.action_histories = np.array([-d['steerCommand'].to_numpy()[:self.terminate_step] for d in dfs]) # steer commands are logged with left-positive convention but this simulator uses right-positive
+    self.state_histories = np.array([np.column_stack([np.sin(d['roll'].to_numpy())[:self.terminate_step + FUTURE_PLAN_STEPS] * ACC_G,
+                                    d['vEgo'].to_numpy()[:self.terminate_step + FUTURE_PLAN_STEPS],
+                                    d['aEgo'].to_numpy()[:self.terminate_step + FUTURE_PLAN_STEPS]]) for d in dfs])
+    self.target_lataccel_histories = np.array([d['targetLateralAcceleration'].to_numpy()[:self.terminate_step + FUTURE_PLAN_STEPS] for d in dfs])
+    self.action_histories = np.array([-d['steerCommand'].to_numpy()[:self.terminate_step + FUTURE_PLAN_STEPS] for d in dfs]) # steer commands are logged with left-positive convention but this simulator uses right-positive
 
   def sim_step(self, step_idx: int) -> None:
     preds = self.sim_model.get_current_lataccel(
@@ -125,6 +125,7 @@ class TinyPhysicsSimulator:
     actions = self.controller.update(self.target_lataccel_histories[:, step_idx], self.current_lataccel, self.state_histories[:, step_idx], future_plan=self.futureplan)
     if step_idx < CONTROL_START_IDX:
       actions = self.action_histories[:, step_idx]
+
     actions = np.clip(actions, STEER_RANGE[0], STEER_RANGE[1])
     self.action_histories[:, step_idx] = actions
 
@@ -151,7 +152,9 @@ class TinyPhysicsSimulator:
   def rollout(self) -> Tuple[float, float, float]:
     for _ in range(CONTEXT_LENGTH, self.terminate_step):
       self.step()
-
+    self.target_lataccel_histories = self.target_lataccel_histories[:, :self.terminate_step]
+    self.current_lataccel_histories = self.current_lataccel_histories[:, :self.terminate_step]
+    self.action_histories = self.action_histories[:, :self.terminate_step]
     return self.compute_cost()
 
 def get_available_controllers():

@@ -12,6 +12,7 @@ sys.path.insert(1, os.path.abspath('..') )
 
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
@@ -51,7 +52,7 @@ def episode_rollout(model: TinyPhysicsModel, dfs: List[pd.DataFrame], buffer: PP
     rewards = torch.from_numpy(d_rewards)
 
     if rewards.shape[1] != episode_len + 1 - policy_model.obs_seq_len:
-        print(f"reward length doesn't match episode_len+1: rewards len:{len(rewards)}, episode_len+1:{episode_len+1}") 
+        print(f"reward length doesn't match episode_len+1: rewards len:{rewards.shape[1]}, episode_len+1:{episode_len + 1 - policy_model.obs_seq_len}") 
         return
 
     buffer.reset()
@@ -73,7 +74,7 @@ def episode_rollout(model: TinyPhysicsModel, dfs: List[pd.DataFrame], buffer: PP
 
     return buffer, rewards, lat_cost, jerk_cost, total_cost
 
-def train(policy_model: ActorCritic, actor_optimizer: optim.Optimizer, critic_optimizer: optim.Optimizer, run_rollout: Callable, episode_len: int, path_boundary: float, n_steps: int, n_episode: int, n_epoch: int, batch_size: int, clip_eps: float, device: torch.device, checkpoint=None):
+def train(policy_model: ActorCritic, actor_optimizer: optim.Optimizer, critic_optimizer: optim.Optimizer, run_rollout: Callable, episode_len: int, path_boundary: float, n_steps: int, n_episode: int, n_epoch: int, batch_size: int, clip_eps: float, device: torch.device, checkpoint=None, start_logstd=None):
     reward_history = []
     lat_cost_history = []
     jerk_cost_history = []
@@ -97,7 +98,10 @@ def train(policy_model: ActorCritic, actor_optimizer: optim.Optimizer, critic_op
         actor_obj_history = checkpoint['actor_obj_history']
         critic_loss_history = checkpoint['critic_loss_history']
         logstd_history = checkpoint['logstd_history']
-
+    
+    if start_logstd:
+        nn.init.constant_(policy_model.log_std, start_logstd)
+        
     for i_step in range(start_step, n_steps):
         # Run simulation
         buffer, rewards, lat_cost, jerk_cost, total_cost = run_rollout(policy_model, n_episode, episode_len, path_boundary, device)
@@ -119,23 +123,23 @@ def train(policy_model: ActorCritic, actor_optimizer: optim.Optimizer, critic_op
 
             for data in data_loader:
                 actions, observations, targets, transitions = data
-                actions = actions.type(torch.float32)
+                actions = actions.type(torch.float32).to(device)
                 observations = observations.to(device)
                 targets = targets.to(device)
                 transitions = transitions.to(device)
-
+                
+                # Actor step
                 actor_optimizer.zero_grad()
-                critic_optimizer.zero_grad()
-
                 action_dist, value_estimates = policy_model(observations, targets)
-                action_prob_new = action_dist.log_prob(actions)
-                value_estimates = value_estimates.flatten()
-
+                action_prob_new = torch.exp(action_dist.log_prob(actions / policy_model.action_scale))
                 a_l = actor_loss(action_prob_new, transitions[:, 0], transitions[:, 3], clip_eps)
-                c_l = value_loss(value_estimates, transitions[:, 2])
-
                 a_l.backward()
                 actor_optimizer.step()
+
+                critic_optimizer.zero_grad()
+                action_dist, value_estimates = policy_model(observations, targets)
+                value_estimates = value_estimates.flatten()
+                c_l = value_loss(value_estimates, transitions[:, 2])
                 c_l.backward()
                 critic_optimizer.step()
 
@@ -193,10 +197,11 @@ if __name__ == '__main__':
     clip_eps = config['clip_eps']
     discount_factor = config['discount_factor']
     td_decay = config['td_decay']
+    start_logstd = config['start_logstd'] if "start_logstd" in config else None
 
     device = torch.device('cuda')
     tinyphysicsmodel = TinyPhysicsModel('../models/tinyphysics.onnx', debug=False)
-    policy_model = ActorCritic(obs_dim=4, obs_seq_len=10, target_dim=31, action_dim=ppo.ACTION_DIM, has_continuous_action=False).to(device)
+    policy_model = ActorCritic(obs_dim=4, obs_seq_len=20, target_dim=31, action_dim=1, has_continuous_action=True, action_scale=2).to(device)
     data = Path('../data/')
     data_paths = sorted(data.iterdir())[5000:]
     data_paths = [str(x) for x in data_paths]
@@ -208,6 +213,6 @@ if __name__ == '__main__':
 
     sim_rollout = partial(episode_rollout, tinyphysicsmodel, dfs, experience_buffer)
 
-    result = train(policy_model, actor_optimizer, critic_optimizer, sim_rollout, episode_len, path_boundary, n_step, n_episode, n_epoch, batch_size, clip_eps, device, checkpoint)
+    result = train(policy_model, actor_optimizer, critic_optimizer, sim_rollout, episode_len, path_boundary, n_step, n_episode, n_epoch, batch_size, clip_eps, device, checkpoint, start_logstd)
     np.save(f'results/result_{model_id}.npy', np.array(result, dtype=object), allow_pickle=True)
     

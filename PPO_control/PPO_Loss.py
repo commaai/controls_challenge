@@ -2,13 +2,13 @@ from typing import Tuple
 
 import torch
 
-def actor_loss(action_p: torch.Tensor, action_p_old: torch.Tensor, advantage: torch.Tensor, clip_eps: float):
+def actor_loss(action_p: torch.Tensor, action_p_old: torch.Tensor, advantage: torch.Tensor, clip_eps: float) -> torch.Tensor:
     eps = 1e-8
     r = action_p / (action_p_old + eps)
     L_clip = torch.mean(torch.min(r * advantage, torch.clip(r, 1 - clip_eps, 1 + clip_eps) * advantage))
     return -L_clip
 
-def value_loss(value: torch.Tensor, value_target: torch.Tensor) -> Tuple[torch.Tensor, float, float, float]:
+def value_loss(value: torch.Tensor, value_target: torch.Tensor) -> torch.Tensor:
     L_value = torch.mean((value - value_target) ** 2)
     return L_value
 

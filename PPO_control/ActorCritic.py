@@ -87,20 +87,23 @@ class ActorCritic(nn.Module):
         
             if self.has_continuous_action:
                 # Continuous case
-                action = action_logit.sample()
-                action_prob = torch.exp(action_logit.log_prob(action))
-                action = action.numpy() * self.action_scale
-                action_prob = action_prob.numpy()
+                if eval:
+                    action = action_logit.mean
+                    action_prob = torch.exp(action_logit.log_prob(action)).cpu().numpy()
+                    action = action.cpu().numpy() * self.action_scale
+                else:
+                    action = action_logit.sample()
+                    action_prob = torch.exp(action_logit.log_prob(action)).cpu().numpy()
+                    action = action.cpu().numpy() * self.action_scale
             else:
                 # Discrete case
-                action_logit = action_logit.numpy()
+                action_logit = action_logit.cpu().numpy()
                 if eval:
-                    
                     action = action_logit.argmax(axis=1)
                     action_prob = action_logit[np.arange(len(action)), action]
                 else:
                     action = (action_logit.cumsum(axis=1) > self.rng.random(action_logit.shape[0])[:, np.newaxis]).argmax(axis=1) # Inverse transform sampling
                     action_prob = action_logit[np.arange(len(action)), action]
             
-        return action, action_prob, value.flatten().numpy()
+        return action, action_prob, value.flatten().cpu().numpy()
 
