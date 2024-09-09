@@ -1,5 +1,6 @@
 from . import BaseController
 import numpy as np
+from scipy.signal import butter, lfilter
 
 ACC_G = 9.81
 
@@ -7,75 +8,79 @@ class Controller(BaseController):
   """
   A PIDF controller with bycicle dynamic model feedforward
   """
-  def __init__(self, p, i, d, f):
-    self.p = p
-    self.i = i
-    self.d = d
-    self.f = f
-    self.error_integral = 0
-    self.prev_error = 0
+  def __init__(self,):
 
-    self.steer_command_history = []
-    self.current_la_history = []
-    self.state_history = []
-    self.beta0 = -0.0769574481921961
-    self.beta1 = 0.0027094010571292247
 
-  def update_fit(self):
-    '''
-    Fit parameters beta0, beta1 of a front steering bycicle model with simple linear regression:
-    $a_{lat} = \beta_0 + \beta_1 * v^2 * sin(\gamma)$
-    where gamma is the steer command.
+    self.alpha = 0.9697
+    self.lag = 5
+    self.action_history = []
+    self.error_history = []
+    self.la_history = []
+    self.last_state = None
 
-    beta1 accounts for steer ratio and vehicle length,
-    as this model assume a linear relationship between steer command and steering angle,
-    and that we can approximate sin(x) with x with small angles.
-
-    At the same time, L is just another multiplicative coefficient
-    so we can estimate it and steer ratio together.
-    
-    beta0 would account for other factors like vehicle slip,
-    which we assume to be a constant with small steer angle.
-
-    The parameters of this model can be easily estimated using simple linear regression.
-    '''
-
-    commands = np.array(self.steer_command_history)
-    roll_la = np.array([x[0] for x in self.state_history])
-    la = np.array(self.current_la_history) - roll_la
-    vEgo = np.array([x[1] for x in self.state_history])
-
-    pred_la = vEgo ** 2 * np.sin(commands)
-
-    print(f'commands: {commands}')
-    
-    self.beta1 = np.sum((pred_la - pred_la.mean()) * (la - la.mean())) / np.sum((pred_la - pred_la.mean()) ** 2)
-    self.beta0 = la.mean() - self.beta1 * pred_la.mean()
-
-    print(f'beta0: {self.beta0}, beta1: {self.beta1}')
-    
-  def predict_steer(self, target_steer_la, vEgo):
-    return np.arcsin((target_steer_la - self.beta0) / self.beta1 / vEgo ** 2)
-    
+    # Debug
+    self.predict_la_history = []
+    self.target_la_history = []
+    self.delta_action_history = []
+  
   def update(self, target_lataccel, current_lataccel, state, future_plan):
+      '''
+      target_la_t
+      state_t
+      action_t
+      action_t-lag-1 & la_t-lag-2 -> la_t-1
+
+      la_history[-1] = la_t-1
+      action_history[-1] = action_t-1
+      last_state = state_t-1
+
+      predict_la[-1] = la_t+lag-1
+
+      '''
+      def lowpass_filter(data):
+        nyq = 0.5 * 10
+        normal_cutoff = 2 / nyq
+        b, a = butter(1, normal_cutoff, btype='low', analog=False)
+        return lfilter(b, a, data)
+
       # Update state history
-      if self.steer_command_history:
-        self.current_la_history.append(current_lataccel)
-      # if len(self.current_la_history) > 2:
-      #   self.update_fit()
-      self.state_history.append(state)
+      if self.action_history:
+        self.la_history.append(current_lataccel - self.last_state[0])
 
-      # Feedforward
-      target_steer_la = target_lataccel - state[0]
-      pred_steer = self.predict_steer(target_steer_la, state[1])
+      if len(self.action_history) < self.lag + 1 or len(future_plan[0]) < self.lag:
+        action = 0
+      else:
+        predict_la = [self.la_history[-1]]
+        for t in reversed(range(1, self.lag + 1)):
+          delta_action = self.action_history[-t] - self.action_history[-t-1]
+          predict_la.append(predict_la[-1] + delta_action * self.alpha)
 
-      # PID Feedback
-      error = (target_lataccel - current_lataccel)
-      self.error_integral += error
-      error_diff = error - self.prev_error
-      self.prev_error = error
+        self.predict_la_history.append(predict_la[-1])
+        target_la = future_plan[0][self.lag-1] - future_plan[1][self.lag-1] if self.lag > 0 else target_lataccel - state[0]
+        self.target_la_history.append(target_la)
+        target_delta_la = target_la - predict_la[-1]
+        self.error_history.append(target_delta_la)
+        target_delta_action = target_delta_la / self.alpha
+        self.delta_action_history.append(target_delta_action)
+        target_delta_action = np.clip(target_delta_action, -0.01, 0.01)
+        action = self.action_history[-1] + target_delta_action
+        # action *= 0.25
 
-      command = self.f * pred_steer + self.p * error + self.i * self.error_integral + self.d * error_diff
-      self.steer_command_history.append(command)
+      self.action_history.append(action)
+      self.last_state = state
+      
+      # # Feedforward
+      # target_steer_la = target_lataccel - state[0]
+      # pred_steer = self.predict_steer(target_steer_la, state[1])
 
-      return command
+      # # PID Feedback
+      # error = (target_lataccel - current_lataccel)
+      # self.error_integral += error
+      # error_diff = error - self.prev_error
+      # self.prev_error = error
+
+      # command = self.f * pred_steer + self.p * error + self.i * self.error_integral + self.d * error_diff
+      # self.steer_command_history.append(command)
+      # self.last_state = state
+
+      return action
