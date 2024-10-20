@@ -29,7 +29,7 @@ LATACCEL_RANGE = [-5, 5]
 STEER_RANGE = [-2, 2]
 MAX_ACC_DELTA = 0.5
 DEL_T = 0.1
-LAT_ACCEL_COST_MULTIPLIER = 5.0
+LAT_ACCEL_COST_MULTIPLIER = 50.0
 
 FUTURE_PLAN_STEPS = FPS * 5  # 5 secs
 
@@ -130,12 +130,13 @@ class TinyPhysicsSimulator:
     if step_idx >= CONTROL_START_IDX:
       self.current_lataccel = pred
     else:
-      self.current_lataccel = self.get_state_targetfuture(step_idx)['targetfuture'][0]
+      self.current_lataccel = self.target_lataccel_history[-1]
+      # self.current_lataccel = self.get_state_targetfuture(step_idx)['targetfuture'][0]
 
     self.current_lataccel_history.append(self.current_lataccel)
 
   def control_step(self, step_idx: int) -> None:
-    action = self.controller.update(self.target_lataccel_history[step_idx], self.current_lataccel, self.state_history[step_idx], target_future=self.target_future)
+    action = self.controller.update(self.target_lataccel_history[step_idx], self.current_lataccel, self.state_history[step_idx], future_plan=self.target_future)
     if step_idx < CONTROL_START_IDX:
       action = self.data['steer_command'].values[step_idx]
     action = np.clip(action, STEER_RANGE[0], STEER_RANGE[1])
@@ -145,7 +146,7 @@ class TinyPhysicsSimulator:
     state = self.data.iloc[step_idx]
     return {
       'state': State(roll_lataccel=state['roll_lataccel'], v_ego=state['v_ego'], a_ego=state['a_ego']),
-      'targetfuture': self.data['target_lataccel'].values[step_idx:step_idx + FUTURE_PLAN_STEPS].tolist()
+      'targetfuture': self.data['target_lataccel'].values[step_idx:step_idx + FUTURE_PLAN_STEPS].tolist() # looks 50 steps into the future
     }
 
   def step(self) -> None:
@@ -176,6 +177,9 @@ class TinyPhysicsSimulator:
     total_cost = (lat_accel_cost * LAT_ACCEL_COST_MULTIPLIER) + jerk_cost
     return {'lataccel_cost': lat_accel_cost, 'jerk_cost': jerk_cost, 'total_cost': total_cost}
 
+  def return_history(self) -> dict:
+    return {'lataccel_history' : self.current_lataccel_history, 'action_history' : self.action_history, 'state_history': self.state_history}
+  
   def rollout(self) -> float:
     if self.debug:
       plt.ion()
