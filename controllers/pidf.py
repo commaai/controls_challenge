@@ -12,7 +12,7 @@ class Controller(BaseController):
 
 
     self.alpha = 0.9697
-    self.lag = 5
+    self.lag = 2
     self.action_history = []
     self.error_history = []
     self.la_history = []

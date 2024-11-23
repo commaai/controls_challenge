@@ -12,7 +12,7 @@ class Controller(BaseController):
 
 
     self.alpha = 0.9697
-    self.lag = 5
+    self.lag = 2
     self.action_history = []
     self.error_history = []
     self.la_history = []
@@ -23,7 +23,7 @@ class Controller(BaseController):
     self.target_la_history = []
     self.delta_action_history = []
 
-  def optimize_mpc(alpha: float, x_0: float, n: int, plan: List[float], W_d: List[float], W_j: List[float]) -> Tuple[List[float], float]:
+  def optimize_mpc(self, x_0: float, n: int, plan: List[float], W_d: List[float], W_j: List[float]) -> Tuple[List[float], float]:
     '''
     Model:
         dx = alpha * du
@@ -46,8 +46,8 @@ class Controller(BaseController):
     '''
 
     # Solve for minima of objective function using closed form solution to gradient
-    upper_alpha = np.triu(alpha * np.ones((n, n)))
-    lower_alpha = np.tril(alpha * np.ones((n, n)))
+    upper_alpha = np.triu(self.alpha * np.ones((n, n)))
+    lower_alpha = np.tril(self.alpha * np.ones((n, n)))
     W_j = np.array(W_j)
     d1 = -2 * W_j # Off diagonal of DuJ
     d0 = np.zeros(n)
@@ -81,45 +81,57 @@ class Controller(BaseController):
 
       '''
 
-      horizon_n = 10
-      # Update state history
-      if self.action_history:
-        self.la_history.append(current_lataccel - self.last_state[0])
-
       if len(self.action_history) < self.lag + 1 or len(future_plan[0]) < self.lag:
-        action = 0
+        action = 0.3 * (target_lataccel - current_lataccel)
       else:
-        predict_la = [self.la_history[-1]]
+        # Get the predicted next actionable state
+        predict_la = current_lataccel - self.last_state[0]
         for t in reversed(range(1, self.lag + 1)):
           delta_action = self.action_history[-t] - self.action_history[-t-1]
-          predict_la.append(predict_la[-1] + delta_action * self.alpha)
+          predict_la += delta_action * self.alpha
+        
+        n = 10
+        if self.lag == 0:
+          plan = [target_lataccel - state[0]]
+          plan.extend([future_plan[0][i] - future_plan[1][i] for i in range(min(len(future_plan[0]), n - 1))])
+        else:
+          plan = [future_plan[0][i] - future_plan[1][i] for i in range(self.lag - 1, min(len(future_plan[0]), self.lag - 1 + n))]
 
-        self.predict_la_history.append(predict_la[-1])
-        target_la = future_plan[0][self.lag-1] - future_plan[1][self.lag-1] if self.lag > 0 else target_lataccel - state[0]
-        self.target_la_history.append(target_la)
-        target_delta_la = target_la - predict_la[-1]
-        self.error_history.append(target_delta_la)
-        target_delta_action = target_delta_la / self.alpha
-        self.delta_action_history.append(target_delta_action)
-        target_delta_action = np.clip(target_delta_action, -0.01, 0.01)
-        action = self.action_history[-1] + target_delta_action
-        # action *= 0.25
+        horizon_n = len(plan)
+        control, prediction, L_d, L_j = self.optimize_mpc(predict_la,
+                                                          horizon_n,
+                                                          plan,
+                                                          [0.95 ** i for i in range(horizon_n)],
+                                                          [5 * 1.3 ** i for i in range(horizon_n - 1)])
+        action = control[0]
 
       self.action_history.append(action)
       self.last_state = state
-      
-      # # Feedforward
-      # target_steer_la = target_lataccel - state[0]
-      # pred_steer = self.predict_steer(target_steer_la, state[1])
 
-      # # PID Feedback
-      # error = (target_lataccel - current_lataccel)
-      # self.error_integral += error
-      # error_diff = error - self.prev_error
-      # self.prev_error = error
+      # # Update state history
+      # if self.action_history:
+      #   self.la_history.append(current_lataccel - self.last_state[0])
 
-      # command = self.f * pred_steer + self.p * error + self.i * self.error_integral + self.d * error_diff
-      # self.steer_command_history.append(command)
+      # if len(self.action_history) < self.lag + 1 or len(future_plan[0]) < self.lag:
+      #   action = 0
+      # else:
+      #   predict_la = [self.la_history[-1]]
+      #   for t in reversed(range(1, self.lag + 1)):
+      #     delta_action = self.action_history[-t] - self.action_history[-t-1]
+      #     predict_la.append(predict_la[-1] + delta_action * self.alpha)
+
+      #   self.predict_la_history.append(predict_la[-1])
+      #   target_la = future_plan[0][self.lag-1] - future_plan[1][self.lag-1] if self.lag > 0 else target_lataccel - state[0]
+      #   self.target_la_history.append(target_la)
+      #   target_delta_la = target_la - predict_la[-1]
+      #   self.error_history.append(target_delta_la)
+      #   target_delta_action = target_delta_la / self.alpha
+      #   self.delta_action_history.append(target_delta_action)
+      #   target_delta_action = np.clip(target_delta_action, -0.01, 0.01)
+      #   action = self.action_history[-1] + target_delta_action
+      #   # action *= 0.25
+
+      # self.action_history.append(action)
       # self.last_state = state
-
+      
       return action
