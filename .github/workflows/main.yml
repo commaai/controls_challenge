@@ -10,7 +10,7 @@ on:
 jobs:
   rollout:
     runs-on: ubuntu-20.04
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,14 +25,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download dataset
-        run: |
-          bash ./download_dataset.sh
-      
       - name: Run Simple controller rollout
         run: |
           python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --controller pid
-      
+
       - name: Run batch rollouts
         run: |
           python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 20 --controller pid

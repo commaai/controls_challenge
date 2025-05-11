@@ -1,16 +1,26 @@
-# Comma Controls Challenge!
-![Car](./imgs/car.jpg)
+<div align="center">
+<h1>comma Controls Challenge v2</h1>
+
+
+<h3>
+  <a href="https://comma.ai/leaderboard">Leaderboard</a>
+  <span> · </span>
+  <a href="https://comma.ai/jobs">comma.ai/jobs</a>
+  <span> · </span>
+  <a href="https://discord.comma.ai">Discord</a>
+  <span> · </span>
+  <a href="https://x.com/comma_ai">X</a>
+</h3>
+
+</div>
 
 Machine learning models can drive cars, paint beautiful pictures and write passable rap. But they famously suck at doing low level controls. Your goal is to write a good controller. This repo contains a model that simulates the lateral movement of a car, given steering commands. The goal is to drive this "car" well for a given desired trajectory.
 
 
-## Geting Started
-We'll be using a synthetic dataset based on the [comma-steering-control](https://github.com/commaai/comma-steering-control) dataset for this challenge. These are actual routes with actual car and road states.
+## Getting Started
+We'll be using a synthetic dataset based on the [comma-steering-control](https://github.com/commaai/comma-steering-control) dataset for this challenge. These are actual car and road states from [openpilot](https://github.com/commaai/openpilot) users.
 
 ```
-# download necessary dataset (~0.6G)
-bash ./download_dataset.sh
-
 # install required packages
 # recommended python==3.11
 pip install -r requirements.txt
@@ -31,7 +41,7 @@ python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_s
 You can also use the notebook at [`experiment.ipynb`](https://github.com/commaai/controls_challenge/blob/master/experiment.ipynb) for exploration.
 
 ## TinyPhysics
-This is a "simulated car" that has been trained to mimic a very simple physics model (bicycle model) based simulator, given realistic driving noise. It is an autoregressive model similar to [ML Controls Sim](https://blog.comma.ai/096release/#ml-controls-sim) in architecture. It's inputs are the car velocity (`v_ego`), forward acceleration (`a_ego`), lateral acceleration due to road roll (`road_lataccel`), current car lateral acceleration (`current_lataccel`) and a steer input (`steer_action`) and predicts the resultant lateral acceleration of the car.
+This is a "simulated car" that has been trained to mimic a very simple physics model (bicycle model) based simulator, given realistic driving noise. It is an autoregressive model similar to [ML Controls Sim](https://blog.comma.ai/096release/#ml-controls-sim) in architecture. Its inputs are the car velocity (`v_ego`), forward acceleration (`a_ego`), lateral acceleration due to road roll (`road_lataccel`), current car lateral acceleration (`current_lataccel`), and a steer input (`steer_action`), then it predicts the resultant lateral acceleration of the car.
 
 
 ## Controllers
@@ -47,7 +57,7 @@ Each rollout will result in 2 costs:
 It is important to minimize both costs. `total_cost`: $(lataccel\\_cost * 50) + jerk\\_cost$
 
 ## Submission
-Run the following command, and submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
+Run the following command, then submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
 
 ```
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller pid
@@ -58,5 +68,6 @@ python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_s
 - With [this commit](https://github.com/commaai/controls_challenge/commit/4282a06183c10d2f593fc891b6bc7a0859264e88) we fixed a bug that caused the simulator model to be initialized wrong.
 
 ## Work at comma
+
 Like this sort of stuff? You might want to work at comma!
-https://www.comma.ai/jobs
+[comma.ai/jobs](https://comma.ai/jobs)
