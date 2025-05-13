@@ -4,3 +4,6 @@ pandas==2.1.2
 matplotlib==3.8.1
 seaborn==0.13.2
 tqdm
+optuna==3.5.0
+plotly==5.26.0
+kaleido==0.2.1

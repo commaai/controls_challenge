@@ -1,5 +1,74 @@
+# Python
 __pycache__/
-data/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Project specific
 report.html
-models/tinyphysics_*.onnx
-*.swp
+best_pid_params.txt
+visualizations/
+*.onnx
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+*.ipynb
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Logs
+logs/
+*.log
+
+# Data (optional - uncomment if you don't want to track data files)
+data/
+*.csv
+
+# Outputs
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.pkl
+*.joblib
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
