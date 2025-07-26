@@ -47,11 +47,10 @@ Your controller should implement a new [controller](https://github.com/commaai/c
 
 ## Evaluation
 Each rollout will result in 2 costs:
-- `lataccel_cost`: $\dfrac{\Sigma(\mathrm{actual\_lat\_accel} - \mathrm{target\_lat\_accel})^2}{steps} * 100$
+- `lataccel_cost`: $\dfrac{\Sigma(\mathrm{actual{\textunderscore}lat{\textunderscore}accel} - \mathrm{target{\textunderscore}lat{\textunderscore}accel})^2}{\text{steps}} * 100$
+- `jerk_cost`: $\dfrac{(\Sigma( \mathrm{actual{\textunderscore}lat{\textunderscore}accel_t} - \mathrm{actual{\textunderscore}lat{\textunderscore}accel_{t-1}}) / \Delta \mathrm{t} )^{2}}{\text{steps} - 1} * 100$
 
-- `jerk_cost`: $\dfrac{\Sigma((\mathrm{actual\_lat\_accel}_t - \mathrm{actual\_lat\_accel}_{t-1}) / \Delta t)^2}{steps - 1} * 100$
-
-It is important to minimize both costs. `total_cost`: $(\mathrm{lat\_accel\_cost} * 50) + \mathrm{jerk\_cost}$
+It is important to minimize both costs. `total_cost`: $(\mathrm{lat{\textunderscore}accel{\textunderscore}cost} * 50) + \mathrm{jerk{\textunderscore}cost}$
 
 ## Submission
 Run the following command, then submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
