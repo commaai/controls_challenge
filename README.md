@@ -47,8 +47,8 @@ Your controller should implement a new [controller](https://github.com/commaai/c
 
 ## Evaluation
 Each rollout will result in 2 costs:
-- `lataccel_cost`: $\dfrac{\Sigma(\mathrm{actual{\textunderscore}lat{\textunderscore}accel} - \mathrm{target{\textunderscore}lat{\textunderscore}accel})^2}{\text{steps}} * 100$
-- `jerk_cost`: $\dfrac{(\Sigma( \mathrm{actual{\textunderscore}lat{\textunderscore}accel_t} - \mathrm{actual{\textunderscore}lat{\textunderscore}accel_{t-1}}) / \Delta \mathrm{t} )^{2}}{\text{steps} - 1} * 100$
+- `lataccel_cost`: $\dfrac{\Sigma(\mathrm{actual{\textunderscore}lat{\textunderscore}accel} - \mathrm{target{\textunderscore}lat{\textunderscore}accel})^{2}}{\text{steps}} \times 100$
+- `jerk_cost`: $\dfrac{\Sigma\left((\mathrm{actual{\textunderscore}lat{\textunderscore}accel_t} - \mathrm{actual{\textunderscore}lat{\textunderscore}accel_{t-1}}) / \Delta t\right)^{2}}{\text{steps} - 1} \times 100$
 
 It is important to minimize both costs. `total_cost`: $(\mathrm{lat{\textunderscore}accel{\textunderscore}cost} * 50) + \mathrm{jerk{\textunderscore}cost}$
 
@@ -59,6 +59,22 @@ Competitive scores (`total_cost<100`) will be added to the leaderboard
 
 ```
 python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller pid
+```
+
+## Visualization
+[Rerun](https://rerun.io/)-based viewer with timeline scrubbing, multi-controller comparison, and 2D trajectory rendering.
+
+![Rerun viewer](imgs/rerun.png)
+
+```
+# single segment
+python viz_rerun.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --controller pid
+
+# compare two controllers
+python viz_rerun.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --controller pid zero
+
+# batch mode
+python viz_rerun.py --model_path ./models/tinyphysics.onnx --data_path ./data/ --controller pid --num_segs 5
 ```
 
 ## Changelog
