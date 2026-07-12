@@ -1,5 +1,39 @@
 __pycache__/
+*.py[cod]
 data/
 report.html
 models/tinyphysics_*.onnx
 *.swp
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Editor/IDE
+.idea/
+.vscode/
+.claude/
+
+# Downloads / archives / notebook artifacts
+*.zip
+.ipynb_checkpoints/
+
+# Credentials & secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*
+*secret*
+id_rsa*
+*.gpg
