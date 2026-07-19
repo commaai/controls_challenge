@@ -1,0 +1,79 @@
+================================================================================
+ comma Controls Challenge v2 — Solution
+ Controller: controllers/custom.py
+================================================================================
+
+1. THE PROBLEM
+--------------------------------------------------------------------------------
+"TinyPhysics" is a neural network that simulates a car's lateral (steering)
+dynamics. A controller must output a steer command in [-2, 2] at 10 Hz so the
+car's actual lateral acceleration tracks a target trajectory. Rollouts are
+scored on two competing costs:
+
+  lataccel_cost = mean((target - actual)^2) * 100      (tracking accuracy)
+  jerk_cost     = mean((diff(actual) / 0.1)^2) * 100    (smoothness)
+  total_cost    = lataccel_cost * 50 + jerk_cost
+
+At every step the controller sees: the current target lateral acceleration,
+the measured lateral acceleration, the car state (v_ego, a_ego, road-roll
+lataccel), and a future plan (the next ~49 steps of targets/roll/speed).
+
+2. APPROACH
+--------------------------------------------------------------------------------
+(a) System identification first. A step-response probe (hold steer at 0, then
+    step it to 0.5 and watch the response) showed the simulated car reacts
+    with ~1-2 control steps (0.1-0.2 s) of actuator lag. Any controller that
+    reacts only to the instantaneous target is therefore permanently late —
+    it pays twice, in tracking error and in the jerky corrections that lag
+    causes.
+
+(b) Design around the lag, not against it. Since the future plan is given,
+    the controller tracks a "lookahead target": the mean of the current
+    target and the next 4 planned targets. This centers the tracking point
+    ~2 steps into the future (matching the measured lag) and simultaneously
+    low-pass filters the target, which directly reduces jerk. This one idea
+    was worth ~12% of total cost before any gain tuning.
+
+(c) PID feedback does the rest, tuned by grid search (8 rounds, ~60 configs)
+    on training segments, with tail statistics (median/p95/max) tracked —
+    not just the mean — and final selection validated on 100 held-out
+    segments never used during tuning.
+
+3. HOW THE CONTROLLER WORKS (controllers/custom.py)
+--------------------------------------------------------------------------------
+  # Lookahead target: mean of current target and the next 4 planned targets
+  target = mean([target_lataccel] + future_plan.lataccel[:4])
+
+  error           = target - current_lataccel
+  error_integral += error            (clamped to [-10, 10], anti-windup)
+  error_diff      = error - prev_error
+
+  action = 0.18 * error + 0.13 * error_integral - 0.04 * error_diff
+
+Why each piece exists:
+
+  * Lookahead target — delay compensation + target smoothing (see 2b).
+
+  * P (0.18) and I (0.13): the integral does the steady-state work (e.g.
+    holding steer against road roll); the proportional term handles
+    transients. Integral gains beyond ~0.16 hit an instability cliff where
+    the loop oscillates and jerk cost explodes — 0.13 leaves margin.
+
+  * D (-0.04): small negative derivative gain damps fast error changes and
+    measurably lowers jerk in this noisy, laggy plant.
+
+  * Integral clamp (±10) — the critical robustness parameter. The cost
+    distribution is dominated by rare hard segments where the car slows to
+    near standstill: steering loses authority, targets become unreachable,
+    and the integral winds up. Unclamped, the wound-up integral causes a
+    huge overshoot when authority returns; clamped too tight (2-5), the
+    controller can't hold the large sustained steer hard segments need.
+    Clamp = 10 cut the worst-segment cost ~5x with no loss elsewhere.
+
+Ideas tested and rejected (made results worse or no better):
+  * Explicit feedforward on planned target change (redundant with lookahead).
+  * Low-pass smoothing of the steer action (added lag, net worse).
+  * Longer lookahead (6-8 steps): over-anticipates, tracking degrades.
+  * Tight integral clamps (2-5): starves hard segments of steer authority.
+
+================================================================================
